@@ -1,9 +1,13 @@
-import React from "react";
-import "./App.css";
-import CollabBoard from "./skeleton";
+import React from 'react';
+import Board from './components/Board';
+import './App.css';
 
 function App() {
-  return <CollabBoard />;
+  return (
+    <div className="App">
+      <Board boardId="group-13" />
+    </div>
+  );
 }
 
 export default App;

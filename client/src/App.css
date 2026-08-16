@@ -458,3 +458,316 @@ section button:last-child:hover {
     width: 100%;
   }
 }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+.collab-layout {
+  display: flex;
+  height: 100vh;
+  background-color: #EFECE6;
+  color: #1C1C1C;
+}
+
+/* Sidebar */
+.collab-sidebar {
+  width: 260px;
+  background-color: #E4E1DA;
+  border-right: 1px solid #D5D2CB;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 16px;
+}
+
+.brand-title {
+  font-weight: bold;
+  font-size: 15px;
+  padding: 8px;
+  margin-bottom: 20px;
+}
+
+.group-card {
+  background-color: #DDD8D0;
+  padding: 12px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+  border: 1px solid #CCC7BE;
+}
+
+.group-badge {
+  background-color: #EAB308;
+  color: black;
+  font-weight: bold;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.group-name {
+  font-size: 12px;
+  font-weight: bold;
+  line-height: 1.2;
+}
+
+.group-sub {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.nav-links {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  text-decoration: none;
+  font-size: 12px;
+  color: #4b5563;
+}
+
+.nav-item.active {
+  background-color: rgba(212, 207, 8, 0.2);
+  color: black;
+  font-weight: 500;
+}
+
+.nav-item:hover {
+  background-color: #D9D4CC;
+}
+
+/* Main Area */
+.collab-main-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.collab-header {
+  height: 64px;
+  background-color: #E4E1DA;
+  border-bottom: 1px solid #D5D2CB;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+}
+
+.search-input {
+  width: 380px;
+  background-color: #DDD8D0;
+  border: 1px solid #CCC7BE;
+  font-size: 12px;
+  border-radius: 6px;
+  padding: 8px 12px;
+  outline: none;
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: #CCC7BE;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.collab-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px;
+}
+
+.roadmap-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.roadmap-title {
+  font-size: 22px;
+  font-weight: bold;
+  letter-spacing: -0.5px;
+}
+
+.roadmap-sub {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.new-task-btn {
+  background-color: #EAB308;
+  color: black;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.new-task-btn:hover {
+  background-color: #CA8A04;
+}
+
+/* Kanban Columns */
+.kanban-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+.kanban-column {
+  background-color: #EAE6DF;
+  border: 1px solid #DDD8D0;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.column-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.column-title-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.column-title {
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.column-count {
+  background-color: #EAB308;
+  color: black;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 9999px;
+}
+
+.column-dots {
+  color: #9ca3af;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+
+.task-card {
+  background-color: #F6F4F0;
+  border: 1px solid #E5E1D8;
+  padding: 12px;
+  border-radius: 6px;
+  position: relative;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.priority-badge-yellow {
+  font-size: 10px;
+  background-color: #FEF08A;
+  color: #854D0E;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.priority-badge-black {
+  font-size: 10px;
+  background-color: black;
+  color: white;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.priority-badge-done {
+  font-size: 10px;
+  background-color: #E4E1DA;
+  color: #4b5563;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.task-title {
+  font-weight: 600;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.task-desc {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.task-date {
+  font-size: 10px;
+  color: #9ca3af;
+  margin-top: 8px;
+}
+
+.task-edit-icon {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.add-task-btn {
+  width: 100%;
+  margin-top: 16px;
+  padding: 8px;
+  border: 1px dashed #C9C4BC;
+  background: transparent;
+  color: #6b7280;
+  font-size: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.add-task-btn:hover {
+  background-color: #DDD8D0;
+}
