@@ -4,12 +4,13 @@ import { AuthProvider } from './context/AuthContext';
 import LoginForm from './components/auth/LoginForm';
 import RegisterForm from './components/auth/RegisterForm';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import Board from './components/Board';
+import './App.css';
 
 const BoardView = () => {
   return (
-    <div style={{ padding: '2rem', textAlign: 'center', fontFamily: 'sans-serif' }}>
-      <h1>CollabBoard Dashboard</h1>
-      <p>Welcome! You are successfully authenticated.</p>
+    <div className="App">
+      <Board boardId="group-13" />
     </div>
   );
 };
@@ -21,11 +22,11 @@ function App() {
         <Routes>
           <Route path="/login" element={<LoginForm />} />
           <Route path="/register" element={<RegisterForm />} />
-
+          
           <Route element={<ProtectedRoute />}>
             <Route path="/boards" element={<BoardView />} />
           </Route>
-
+          
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </Router>
