@@ -1,3 +1,17 @@
+<<<<<<< HEAD
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden; 
+  background-color: #e6e6e6; 
+}
+=======
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
@@ -11,3 +25,4 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+>>>>>>> f552f41280e5e1a770af709043d6ee67336b28f0
