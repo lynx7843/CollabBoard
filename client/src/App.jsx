@@ -7,11 +7,12 @@ import LoginForm from './components/auth/LoginForm';
 import RegisterForm from './components/auth/RegisterForm';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { useBoardPersistence } from './utils/hooks/useBoardPersistence';
+import { NetworkStatusBar } from './utils/hooks/components/NetworkStatusBar';
 
 const BOARD_ID = 'group-13';
 
 function BoardPage() {
-  const { conflict, resolveConflict, submitAction } = useBoardPersistence(BOARD_ID, null);
+  const { conflict, resolveConflict, submitAction, isOnline, isSyncing, message } = useBoardPersistence(BOARD_ID, null);
 
   const dummyMembers = [
     { _id: '1', name: 'Sarah Connor', email: 'sarah@example.com' },
@@ -20,6 +21,7 @@ function BoardPage() {
 
   return (
     <BoardLayout>
+      <NetworkStatusBar isOnline={isOnline} isSyncing={isSyncing} message={message} />
       <TaskConflictDialog conflict={conflict} onResolve={resolveConflict} />
       {/* The main Kanban board UI */}
       <BoardView boardId={BOARD_ID} submitAction={submitAction} />
