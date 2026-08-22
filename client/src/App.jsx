@@ -1,9 +1,12 @@
 import { BoardLayout } from './components/BoardLayout';
 import { BoardView } from './components/BoardView';
 import { MemberManager } from './components/MemberManager';
+import TaskConflictDialog from './components/TaskConflictDialog';
+import { useBoardPersistence } from './utils/hooks/useBoardPersistence';
 
 export default function App() {
-  
+  const { conflict, resolveConflict } = useBoardPersistence('group-13', null);
+
   const dummyMembers = [
     { _id: '1', name: 'Sarah Connor', email: 'sarah@example.com' },
     { _id: '2', name: 'John Smith', email: 'john@example.com' }
@@ -11,6 +14,7 @@ export default function App() {
 
   return (
     <BoardLayout>
+      <TaskConflictDialog conflict={conflict} onResolve={resolveConflict} />
       {/* The main Kanban board UI */}
       <BoardView />
       
