@@ -14,25 +14,20 @@ const BOARD_ID = 'group-13';
 function BoardPage() {
   const { conflict, resolveConflict, submitAction, isOnline, isSyncing, message } = useBoardPersistence(BOARD_ID, null);
 
-  const dummyMembers = [
-    { _id: '1', name: 'Sarah Connor', email: 'sarah@example.com' },
-    { _id: '2', name: 'John Smith', email: 'john@example.com' }
-  ];
-
   return (
     <BoardLayout>
       <NetworkStatusBar isOnline={isOnline} isSyncing={isSyncing} message={message} />
       <TaskConflictDialog conflict={conflict} onResolve={resolveConflict} />
       {/* The main Kanban board UI */}
       <BoardView boardId={BOARD_ID} submitAction={submitAction} />
+    </BoardLayout>
+  );
+}
 
-
-      <div style={{ marginTop: '64px', borderTop: '1px solid #d4d4d4', paddingTop: '32px' }}>
-        <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '24px', color: '#1a1a1a' }}>
-          Settings Sandbox
-        </h2>
-        <MemberManager boardId="mock-board-id" initialMembers={dummyMembers} />
-      </div>
+function MembersPage() {
+  return (
+    <BoardLayout>
+      <MemberManager boardId={BOARD_ID} initialMembers={[]} />
     </BoardLayout>
   );
 }
@@ -44,6 +39,7 @@ export default function App() {
       <Route path="/register" element={<RegisterForm />} />
       <Route element={<ProtectedRoute />}>
         <Route path="/boards" element={<BoardPage />} />
+        <Route path="/members" element={<MembersPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/boards" replace />} />
     </Routes>
