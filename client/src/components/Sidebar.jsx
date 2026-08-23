@@ -1,5 +1,7 @@
-import { Link, useLocation } from 'react-router-dom';
-import { LayoutGrid, Users, Settings } from 'lucide-react';
+import { useContext } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { LayoutGrid, Users, Settings, LogOut } from 'lucide-react';
+import { AuthContext } from '../context/AuthContext';
 import { colors } from '../theme';
 
 // `to` is omitted for destinations that have no route yet; those render as
@@ -12,6 +14,13 @@ const NAV_ITEMS = [
 
 export const Sidebar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { logout } = useContext(AuthContext);
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login', { replace: true });
+  };
 
   return (
     <aside style={{
@@ -81,6 +90,33 @@ export const Sidebar = () => {
           );
         })}
       </nav>
+
+      {/* Pinned to the bottom of the sidebar */}
+      <button
+        type="button"
+        onClick={handleLogout}
+        className="cb-nav-item"
+        style={{
+          marginTop: 'auto',
+          display: 'flex',
+          width: '100%',
+          alignItems: 'center',
+          gap: '12px',
+          borderRadius: '8px',
+          padding: '12px 16px',
+          textAlign: 'left',
+          fontSize: '14px',
+          fontWeight: '500',
+          border: 'none',
+          background: 'transparent',
+          color: colors.gray600,
+          cursor: 'pointer',
+          transition: 'background-color 150ms, color 150ms'
+        }}
+      >
+        <LogOut size={20} />
+        Log out
+      </button>
     </aside>
   );
 };
