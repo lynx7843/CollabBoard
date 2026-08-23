@@ -130,17 +130,18 @@ The Vite dev server already proxies `/api` to `http://localhost:5000`, so the cl
 
 ## Contributors
 
-| Role | Name |
+| Account Name | Name |
 | --- | --- |
-| name | example |
-| name | example |
-| name | example |
-| name | example |
-| name | example |
-| name | example |
-| name | example |
-| name | example |
-| name | example |
+| lynx7843 | EADA EDIRISINGHA |
+| samithakahawita25-rgb | KDS MADURANGA |
+| KumudithaRupz | KGKSA RUPASENA |
+| Nithila33934 | WNS SILVA |
+| pabasari-janakalani  | PJ JAYAKODI  |
+| pktfernando | PKT FERNANDO  |
+| SayuniDHS | SDH SENANAYAKE |
+| ukdbdeshan | UKDB DESHAN |
+| upeka200163 | MGGU SEWWANDI |
+| wsklwithana  | WSKL WITHANA |
 
 ## Known Limitations
 
