@@ -1,6 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
+import { DEMO_MODE, DEMO_TOKEN, DEMO_USER } from '../../demo/demoMode';
 
 const RegisterForm = () => {
   const [name, setName] = useState('');
@@ -23,6 +24,18 @@ const RegisterForm = () => {
     }
 
     setLoading(true);
+
+    // No auth backend yet: accept the entered details and sign in locally.
+    if (DEMO_MODE) {
+      loginSession(DEMO_TOKEN, {
+        ...DEMO_USER,
+        name: name || DEMO_USER.name,
+        email: email || DEMO_USER.email,
+      });
+      setLoading(false);
+      navigate('/boards');
+      return;
+    }
 
     try {
       const response = await fetch('/api/auth/register', {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { cacheBoardData, getCachedBoardData, getOfflineQueue, queueOfflineAction, replaceOfflineQueue } from '../storage';
+import { DEMO_MODE } from '../../demo/demoMode';
 
 const authHeaders = () => ({
   'Content-Type': 'application/json',
@@ -42,6 +43,10 @@ export const useBoardPersistence = (boardId, fallbackBoard) => {
   }, [boardId]);
 
   const submitAction = useCallback(async (action) => {
+    // No actions endpoint yet: report success so edits don't queue as
+    // "server unavailable" and push an error into the status bar.
+    if (DEMO_MODE) return { saved: true, data: action };
+
     if (!navigator.onLine) {
       queueOfflineAction({ boardId, ...action });
       setMessage('Change saved locally. It will sync when you reconnect.');
@@ -93,6 +98,7 @@ export const useBoardPersistence = (boardId, fallbackBoard) => {
   }, [conflict, submitAction]);
 
   const syncQueue = useCallback(async () => {
+    if (DEMO_MODE) return;
     const queue = getOfflineQueue();
     if (!queue.length) return;
     setIsSyncing(true);
@@ -126,7 +132,9 @@ export const useBoardPersistence = (boardId, fallbackBoard) => {
         if (getCachedBoardData(boardId)) setMessage('Showing the latest board saved on this device.');
       }
     };
-    if (navigator.onLine) fetchBoard();
+    // No boards endpoint yet: skip the request that would always fail and
+    // leave a stale-cache notice in the status bar.
+    if (!DEMO_MODE && navigator.onLine) fetchBoard();
   }, [boardId, saveBoard]);
 
   useEffect(() => {

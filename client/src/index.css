@@ -8,5 +8,73 @@ html, body, #root {
   height: 100vh;
   width: 100vw;
   overflow: hidden;
-  background-color: #e6e6e6;
+  background-color: #ffffff;
+}
+
+/*
+ * Hover / focus states from skeleton.jsx. Inline styles can't express these,
+ * so the components carry a class and the state lives here.
+ */
+
+/* Sidebar nav items */
+.cb-nav-item:hover {
+  background-color: #f3f4f6;
+  color: #000000;
+}
+
+.cb-nav-item.cb-active:hover {
+  background-color: #fef9c3;
+}
+
+.cb-nav-item:focus-visible,
+.cb-icon-btn:focus-visible,
+.cb-col-menu:focus-visible,
+.cb-add-task:focus-visible,
+.cb-profile:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #facc15;
+}
+
+/* Task card edit (pencil) button */
+.cb-icon-btn:hover {
+  background-color: #fef9c3;
+  color: #000000;
+}
+
+/* Column overflow (•••) button */
+.cb-col-menu:hover {
+  background-color: #e5e7eb;
+  color: #000000;
+}
+
+/* Task card */
+.cb-card:hover {
+  border-color: #facc15;
+}
+
+/* Dashed "Add Task" button */
+.cb-add-task:hover {
+  border-color: #facc15;
+  background-color: #fefce8;
+  color: #000000;
+}
+
+/* Primary "New Task" button */
+.cb-new-task:hover {
+  background-color: #fde047;
+}
+
+.cb-new-task:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #eab308;
+}
+
+/* Top bar */
+.cb-profile:hover {
+  background-color: #e5e7eb;
+}
+
+.cb-search:focus {
+  border-color: #facc15;
+  box-shadow: 0 0 0 2px #fef08a;
 }

@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { socket } from '../socket';
+import { DEMO_MODE } from '../demo/demoMode';
 
 // Tracks how many mounted consumers are currently using the shared socket
 // singleton, so one hook instance unmounting doesn't disconnect it out from
@@ -8,6 +9,10 @@ let activeConsumers = 0;
 
 export function useBoardSockets(boardId, dispatch) {
   useEffect(() => {
+    // No socket server to reach yet: skip connecting so the client doesn't
+    // retry :5000 forever and flood the console during the presentation.
+    if (DEMO_MODE) return undefined;
+
     // 1. Connect on mount, disconnect only once the last consumer unmounts
     activeConsumers += 1;
     socket.connect();
