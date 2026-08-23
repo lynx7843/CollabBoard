@@ -28,7 +28,17 @@ export const DEMO_USER = {
 };
 
 export const DEMO_MEMBERS = [
-  { _id: 'demo-user', name: 'Demo User', email: 'demo@collabboard.app' },
-  { _id: '1', name: 'Sarah Connor', email: 'sarah@example.com' },
-  { _id: '2', name: 'John Smith', email: 'john@example.com' },
-];
+  'Dilan',
+  'Samitha',
+  'Buddhima',
+  'Kumuditha',
+  'Kavindu',
+  'Nithila',
+  'Sayuni',
+  'Upeka',
+  'Pabasari',
+].map((name) => ({
+  _id: `member-${name.toLowerCase()}`,
+  name,
+  email: `${name.toLowerCase()}@collabboard.app`,
+}));

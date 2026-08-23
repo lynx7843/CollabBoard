@@ -26,6 +26,12 @@ html, body, #root {
   background-color: #fef9c3;
 }
 
+/* Blocked-out nav item ("Coming soon") — stays inert on hover */
+.cb-nav-item.cb-disabled:hover {
+  background-color: transparent;
+  color: #9ca3af;
+}
+
 .cb-nav-item:focus-visible,
 .cb-icon-btn:focus-visible,
 .cb-col-menu:focus-visible,
