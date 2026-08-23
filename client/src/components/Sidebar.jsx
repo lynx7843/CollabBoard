@@ -1,84 +1,85 @@
 import { Link, useLocation } from 'react-router-dom';
+import { LayoutGrid, Users, Settings } from 'lucide-react';
+import { colors } from '../theme';
+
+// `to` is omitted for destinations that have no route yet; those render as
+// inert buttons rather than links that would bounce to the catch-all redirect.
+const NAV_ITEMS = [
+  { id: 'boards', label: 'Boards', icon: LayoutGrid, to: '/boards' },
+  { id: 'members', label: 'Members', icon: Users, to: '/members' },
+  { id: 'settings', label: 'Settings', icon: Settings },
+];
 
 export const Sidebar = () => {
   const location = useLocation();
-  const isMembers = location.pathname.startsWith('/members');
 
   return (
-    <aside style={{ 
-      width: '260px', 
-      backgroundColor: '#e6e6e6', 
-      borderRight: '1px solid #d4d4d4', 
-      padding: '24px 0', 
-      display: 'flex', 
-      flexDirection: 'column' 
+    <aside style={{
+      width: '288px',
+      flexShrink: 0,
+      backgroundColor: colors.white,
+      borderRight: `1px solid ${colors.gray200}`,
+      padding: '20px',
+      display: 'flex',
+      flexDirection: 'column'
     }}>
       {/* Group Header */}
-      <div style={{ padding: '0 24px', display: 'flex', alignItems: 'center', marginBottom: '32px' }}>
-        <div style={{ 
-          backgroundColor: '#ebd673', 
-          borderRadius: '6px', 
-          width: '42px', 
-          height: '42px', 
-          display: 'flex', 
-          justifyContent: 'center', 
-          alignItems: 'center', 
-          fontWeight: 'bold', 
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '32px' }}>
+        <div style={{
+          backgroundColor: colors.yellow400,
+          borderRadius: '8px',
+          width: '48px',
+          height: '48px',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          fontWeight: 'bold',
           fontSize: '14px',
-          marginRight: '12px' 
+          color: colors.black
         }}>
           G13
         </div>
         <div>
-          <div style={{ fontWeight: '700', fontSize: '15px', color: '#1a1a1a' }}>Group 13</div>
-          <div style={{ fontSize: '13px', color: '#666', marginTop: '2px' }}>Marketing Project</div>
+          <p style={{ fontWeight: 'bold', color: colors.black }}>Group 13</p>
+          <p style={{ fontSize: '14px', color: colors.gray500 }}>Marketing Project</p>
         </div>
       </div>
 
       {/* Navigation Links */}
       <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <Link to="/boards" style={{
-          padding: '12px 24px',
-          backgroundColor: isMembers ? 'transparent' : '#e8e5c8', // Light yellow active state
-          display: 'flex',
-          alignItems: 'center',
-          fontWeight: isMembers ? '500' : '600',
-          color: isMembers ? '#555' : '#1a1a1a',
-          cursor: 'pointer',
-          width: '90%',
-          borderTopRightRadius: '20px',
-          borderBottomRightRadius: '20px',
-          textDecoration: 'none'
-        }}>
-          <span style={{ marginRight: '12px', fontSize: '18px' }}>🎛️</span> Boards
-        </Link>
+        {NAV_ITEMS.map(({ id, label, icon: Icon, to }) => {
+          const active = Boolean(to) && location.pathname.startsWith(to);
+          const itemStyle = {
+            display: 'flex',
+            width: '100%',
+            alignItems: 'center',
+            gap: '12px',
+            borderRadius: '8px',
+            padding: '12px 16px',
+            textAlign: 'left',
+            fontSize: '14px',
+            textDecoration: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            transition: 'background-color 150ms, color 150ms',
+            backgroundColor: active ? colors.yellow100 : 'transparent',
+            fontWeight: active ? '600' : '500',
+            color: active ? colors.black : colors.gray600
+          };
+          const className = `cb-nav-item${active ? ' cb-active' : ''}`;
 
-        <Link to="/members" style={{
-          padding: '12px 24px',
-          backgroundColor: isMembers ? '#e8e5c8' : 'transparent',
-          display: 'flex',
-          alignItems: 'center',
-          color: isMembers ? '#1a1a1a' : '#555',
-          fontWeight: isMembers ? '600' : '500',
-          cursor: 'pointer',
-          width: '90%',
-          borderTopRightRadius: '20px',
-          borderBottomRightRadius: '20px',
-          textDecoration: 'none'
-        }}>
-          <span style={{ marginRight: '12px', fontSize: '18px' }}>👥</span> Members
-        </Link>
-
-        <div style={{
-          padding: '12px 24px',
-          display: 'flex',
-          alignItems: 'center',
-          color: '#555',
-          fontWeight: '500',
-          cursor: 'pointer'
-        }}>
-          <span style={{ marginRight: '12px', fontSize: '18px' }}>⚙️</span> Settings
-        </div>
+          return to ? (
+            <Link key={id} to={to} className={className} style={itemStyle}>
+              <Icon size={20} />
+              {label}
+            </Link>
+          ) : (
+            <button key={id} type="button" className={className} style={itemStyle}>
+              <Icon size={20} />
+              {label}
+            </button>
+          );
+        })}
       </nav>
     </aside>
   );

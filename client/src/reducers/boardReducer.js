@@ -14,6 +14,13 @@ export const initialState = {
   error: null,
 };
 
+// Tasks created locally carry `id` while server tasks carry `_id`, so a plain
+// `a._id === b._id` comparison matches every task once both sides are
+// undefined. Only compare a key when the incoming task actually has it.
+const isSameTask = (task, updated) =>
+  (updated._id !== undefined && task._id === updated._id) ||
+  (updated.id !== undefined && task.id === updated.id);
+
 export function boardReducer(state, action) {
   switch (action.type) {
     case 'TASK_CREATED': {
@@ -32,7 +39,7 @@ export function boardReducer(state, action) {
       const newColumns = { ...state.columns };
       Object.keys(newColumns).forEach((colKey) => {
         newColumns[colKey] = newColumns[colKey].map((task) =>
-          task._id === updated._id || task.id === updated.id ? updated : task
+          isSameTask(task, updated) ? updated : task
         );
       });
       return { ...state, columns: newColumns };

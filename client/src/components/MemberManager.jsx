@@ -1,12 +1,24 @@
 import { useState } from 'react';
+import { DEMO_MODE, DEMO_MEMBERS } from '../demo/demoMode';
 
 export const MemberManager = ({ boardId, initialMembers = [] }) => {
-  const [members, setMembers] = useState(initialMembers);
+  // No GET /members endpoint exists yet, so seed the list for the demo.
+  const [members, setMembers] = useState(
+    DEMO_MODE && initialMembers.length === 0 ? DEMO_MEMBERS : initialMembers
+  );
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState('');
 
   const handleAdd = async (e) => {
     e.preventDefault();
+
+    if (DEMO_MODE) {
+      setMembers((prev) => [...prev, { _id: `demo-${Date.now()}`, email }]);
+      setEmail('');
+      setStatus('Member added successfully.');
+      return;
+    }
+
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`/api/boards/${boardId}/members`, {
@@ -32,6 +44,11 @@ export const MemberManager = ({ boardId, initialMembers = [] }) => {
   const handleRemove = async (memberId) => {
     const previous = [...members];
     setMembers((prev) => prev.filter((m) => m._id !== memberId));
+
+    if (DEMO_MODE) {
+      setStatus('Member removed.');
+      return;
+    }
 
     try {
       const token = localStorage.getItem('token');

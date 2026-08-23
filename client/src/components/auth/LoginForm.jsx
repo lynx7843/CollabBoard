@@ -1,6 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
+import { DEMO_MODE, DEMO_TOKEN, DEMO_USER } from '../../demo/demoMode';
 
 const LoginForm = () => {
   const [email, setEmail] = useState('');
@@ -15,6 +16,14 @@ const LoginForm = () => {
     e.preventDefault();
     setError('');
     setLoading(true);
+
+    // No auth backend yet: accept the entered email and sign in locally.
+    if (DEMO_MODE) {
+      loginSession(DEMO_TOKEN, { ...DEMO_USER, email: email || DEMO_USER.email });
+      setLoading(false);
+      navigate('/boards');
+      return;
+    }
 
     try {
       const response = await fetch('/api/auth/login', {

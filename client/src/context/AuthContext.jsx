@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect } from 'react';
+import { DEMO_MODE, DEMO_TOKEN, DEMO_USER } from '../demo/demoMode';
 
 export const AuthContext = createContext();
 
@@ -15,6 +16,11 @@ export const AuthProvider = ({ children }) => {
     if (storedToken && storedUser) {
       setToken(storedToken);
       setUser(JSON.parse(storedUser));
+    } else if (DEMO_MODE) {
+      // No backend to authenticate against: start already signed in so the
+      // protected board routes are reachable during the presentation.
+      setToken(DEMO_TOKEN);
+      setUser(DEMO_USER);
     }
     setLoading(false);
   }, []);
