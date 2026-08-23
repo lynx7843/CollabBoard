@@ -1,4 +1,4 @@
-import { useReducer } from 'react';
+import { useReducer, useState } from 'react';
 import { Plus, Pencil, MoreHorizontal, CheckCircle2 } from 'lucide-react';
 import { boardReducer, initialState } from '../reducers/boardReducer';
 import { useBoardSockets } from '../hooks/useBoardSockets';
@@ -69,7 +69,22 @@ const ColumnHeader = ({ title, count }) => (
   </div>
 );
 
-const TaskCard = ({ task, badge, isDone, onEdit }) => (
+const actionButtonStyle = {
+  border: 'none',
+  background: 'transparent',
+  padding: '4px 8px',
+  borderRadius: '6px',
+  fontSize: '13px',
+  fontWeight: '600',
+  cursor: 'pointer',
+  transition: 'background-color 150ms, color 150ms',
+};
+
+const TaskCard = ({ task, badge, isDone, status, onEdit, onMove, onDelete }) => {
+  const [changing, setChanging] = useState(false);
+  const targets = Object.keys(COLUMN_META).filter((s) => s !== status);
+
+  return (
   <article
     className="cb-card"
     style={{
@@ -134,8 +149,60 @@ const TaskCard = ({ task, badge, isDone, onEdit }) => (
     {task.date && (
       <p style={{ marginTop: '12px', fontSize: '14px', color: colors.gray400 }}>{task.date}</p>
     )}
+
+    {/* Per-task actions */}
+    <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: `1px solid ${colors.gray200}` }}>
+      {changing ? (
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+          <span style={{ fontSize: '13px', color: colors.gray500 }}>Move to:</span>
+          {targets.map((target) => (
+            <button
+              key={target}
+              type="button"
+              className="cb-move-option"
+              onClick={() => { setChanging(false); onMove(task, status, target); }}
+              style={{
+                ...actionButtonStyle,
+                border: `1px solid ${colors.gray300}`,
+                color: colors.black,
+              }}
+            >
+              {COLUMN_META[target].title}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="cb-task-action"
+            onClick={() => setChanging(false)}
+            style={{ ...actionButtonStyle, marginLeft: 'auto', color: colors.gray500 }}
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            type="button"
+            className="cb-task-action"
+            onClick={() => setChanging(true)}
+            style={{ ...actionButtonStyle, color: colors.gray600 }}
+          >
+            Change
+          </button>
+          <button
+            type="button"
+            className="cb-task-delete"
+            onClick={() => onDelete(task)}
+            style={{ ...actionButtonStyle, color: '#dc2626' }}
+          >
+            Delete
+          </button>
+        </div>
+      )}
+    </div>
   </article>
-);
+  );
+};
 
 const AddTaskButton = ({ onClick }) => (
   <button
@@ -164,6 +231,11 @@ const AddTaskButton = ({ onClick }) => (
   </button>
 );
 
+// The badge renders `task.priority`, so it has to track the column a task
+// sits in — both when a task is created and when it is moved.
+const priorityFor = (status) =>
+  status === 'done' ? 'Completed' : status === 'doing' ? 'In Progress' : 'High Priority';
+
 // Prompts for a title/description and returns a task object, or null if cancelled.
 const promptForTask = (status) => {
   const title = window.prompt('Task title:');
@@ -174,7 +246,7 @@ const promptForTask = (status) => {
     title,
     description,
     status,
-    priority: status === 'done' ? 'Completed' : status === 'doing' ? 'In Progress' : 'High Priority',
+    priority: priorityFor(status),
   };
 };
 
@@ -206,6 +278,29 @@ export const BoardView = ({ boardId = 'group-13', submitAction }) => {
     dispatch({ type: 'TASK_UPDATED', payload: updated });
     if (submitAction) {
       await submitAction({ type: 'UPDATE_TASK', taskId: task.id || task._id, task: updated });
+    }
+  };
+
+  const handleMoveTask = async (task, from, to) => {
+    if (from === to) return;
+    const taskId = task.id || task._id;
+
+    dispatch({ type: 'TASK_MOVED', payload: { taskId, from, to } });
+    // Keep the badge in step with the column the task now sits in.
+    dispatch({ type: 'TASK_UPDATED', payload: { ...task, status: to, priority: priorityFor(to) } });
+
+    if (submitAction) {
+      await submitAction({ type: 'MOVE_TASK', taskId, from, to });
+    }
+  };
+
+  const handleDeleteTask = async (task) => {
+    if (!window.confirm(`Delete "${task.title}"?`)) return;
+    const taskId = task.id || task._id;
+
+    dispatch({ type: 'TASK_DELETED', payload: taskId });
+    if (submitAction) {
+      await submitAction({ type: 'DELETE_TASK', taskId });
     }
   };
 
@@ -272,7 +367,10 @@ export const BoardView = ({ boardId = 'group-13', submitAction }) => {
                     task={task}
                     badge={meta.badge(task)}
                     isDone={status === 'done'}
+                    status={status}
                     onEdit={handleEditTask}
+                    onMove={handleMoveTask}
+                    onDelete={handleDeleteTask}
                   />
                 ))}
                 <AddTaskButton onClick={() => handleAddTask(status)} />

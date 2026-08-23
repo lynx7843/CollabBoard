@@ -45,6 +45,26 @@ export function boardReducer(state, action) {
       return { ...state, columns: newColumns };
     }
 
+    // Moves a task between columns. TASK_UPDATED replaces a task in place and
+    // deliberately keeps its column, so relocating needs its own action.
+    case 'TASK_MOVED': {
+      const { taskId, from, to } = action.payload;
+      if (from === to) return state;
+
+      const source = state.columns[from] || [];
+      const task = source.find((t) => t._id === taskId || t.id === taskId);
+      if (!task) return state;
+
+      return {
+        ...state,
+        columns: {
+          ...state.columns,
+          [from]: source.filter((t) => t !== task),
+          [to]: [...(state.columns[to] || []), { ...task, status: to }],
+        },
+      };
+    }
+
     case 'TASK_DELETED': {
       const taskId = action.payload;
       const newColumns = { ...state.columns };
