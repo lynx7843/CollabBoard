@@ -116,7 +116,9 @@ export const useBoardPersistence = (boardId, fallbackBoard) => {
   useEffect(() => {
     const fetchBoard = async () => {
       try {
-        const response = await fetch(`/api/boards/${boardId}`);
+        const response = await fetch(`/api/boards/${boardId}`, {
+          headers: authHeaders(),
+        });
         if (!response.ok) throw new Error();
         saveBoard(await response.json());
         setMessage('');
