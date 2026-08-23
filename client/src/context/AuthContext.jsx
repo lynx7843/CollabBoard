@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect } from 'react';
-import { DEMO_MODE, DEMO_TOKEN, DEMO_USER } from '../demo/demoMode';
+import { DEMO_MODE } from '../demo/demoMode';
 
 export const AuthContext = createContext();
 
@@ -10,17 +10,19 @@ export const AuthProvider = ({ children }) => {
 
   // Check for stored token and user data on initial app load
   useEffect(() => {
+    // In demo mode a stored session is deliberately NOT restored, so the login
+    // screen always runs before the dashboard (and every reload returns to it).
+    if (DEMO_MODE) {
+      setLoading(false);
+      return;
+    }
+
     const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
 
     if (storedToken && storedUser) {
       setToken(storedToken);
       setUser(JSON.parse(storedUser));
-    } else if (DEMO_MODE) {
-      // No backend to authenticate against: start already signed in so the
-      // protected board routes are reachable during the presentation.
-      setToken(DEMO_TOKEN);
-      setUser(DEMO_USER);
     }
     setLoading(false);
   }, []);

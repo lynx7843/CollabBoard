@@ -74,7 +74,18 @@ html, body, #root {
   background-color: #e5e7eb;
 }
 
-.cb-search:focus {
+.cb-search:focus,
+.cb-input:focus {
   border-color: #facc15;
   box-shadow: 0 0 0 2px #fef08a;
+}
+
+.cb-search::placeholder,
+.cb-input::placeholder {
+  color: #9ca3af;
+}
+
+/* Underlined text link (login footer) */
+.cb-link:hover {
+  text-decoration-color: #000000;
 }
