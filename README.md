@@ -1,49 +1,150 @@
-# SyncSpace
+# CollabBoard
 
-A real-time, collaborative Kanban-style task board designed for seamless team productivity. SyncSpace features a clean, high-contrast monochrome interface to eliminate distractions and keep the focus entirely on your work.
+A real-time, collaborative Kanban-style task board designed for seamless team productivity. CollabBoard features a clean, high-contrast interface to eliminate distractions and keep the focus entirely on your work.
+
+## Project Status
+
+> **Frontend only.** The React client is running and presentable. The backend has **not been implemented yet** — `server/` currently contains dependencies but no source code.
+>
+> To keep the client usable without an API, it runs in **demo mode**: authentication, board data, and member management are stubbed on the client. See [Demo Mode](#demo-mode) below.
 
 ## Features
 
-* **Real-Time Collaboration:** See teammates' changes update instantly across the board using WebSockets.
-* **Offline Support:** Client-side caching ensures you never lose in-progress work during brief network drops.
-* **Smart Conflict Resolution:** Detects concurrent edits and alerts users rather than silently overwriting data.
-* **Secure Authentication:** JWT-based user registration and login system with protected routes.
-* **Automated Testing & CI:** Fully tested frontend and backend, with a continuous integration pipeline ensuring stability on every push.
+### Working now (client-side)
+
+* **Kanban Board:** Three columns — To Do, Doing, Done — with live task counts.
+* **Task Management:** Create tasks from the board header or any column, edit a task's title and description, move a task between columns, and delete it.
+* **Member Management:** View the board's member list, invite by email, and remove members.
+* **Authentication Flow:** Login and create-account screens with protected routes and a logout action.
+* **Responsive Layout:** Columns grow to fill the board area and scroll horizontally on narrow screens.
+
+### Implemented but awaiting a backend
+
+* **Real-Time Collaboration:** A Socket.io client and board event handlers are wired up, but there is no server to connect to.
+* **Offline Support:** Client-side caching and an offline action queue are implemented in `useBoardPersistence`.
+* **Conflict Resolution:** The client detects HTTP 409 responses and shows a resolution dialog rather than silently overwriting.
+
+### Not yet started
+
+* Backend API, database, and JWT authentication
+* Automated tests and CI
+* Drag-and-drop (`@dnd-kit` is installed but not yet used — tasks move via the **Change** button)
 
 ## Tech Stack
 
-* **Frontend:** React, Jest, React Testing Library
-* **Backend:** Node.js, Express, Jest, Supertest
-* **Database:** MongoDB (via Mongoose)
-* **Real-Time Communications:** Socket.io
-* **DevOps:** Docker, Docker Compose, GitHub Actions
+| Area | Technology |
+| --- | --- |
+| **Frontend** | React 19, Vite 8, React Router 7, lucide-react |
+| **Real-Time** | socket.io-client *(client wired, server pending)* |
+| **Backend** | Node.js, Express, Mongoose, Socket.io *(dependencies declared, not implemented)* |
+| **Tooling** | ESLint |
 
-## Architecture Summary
+## Project Structure
 
-The application is organized into a decoupled client and server:
-* **Client:** Built with React and organized into highly reusable UI components.
-* **Server:** Follows a standard `routes -> controllers -> models` structure for clear separation of concerns.
-* **Data Persistence:** Uses MongoDB with a sensible schema balancing embedding and referencing.
+```
+CollabBoard/
+├── client/                  # React frontend (the runnable app)
+│   └── src/
+│       ├── components/      # Board, layout, member, and auth UI
+│       ├── context/         # AuthContext
+│       ├── hooks/           # useBoardSockets
+│       ├── reducers/        # boardReducer
+│       ├── utils/hooks/     # useBoardPersistence, storage
+│       ├── demo/            # Demo-mode stubs (remove once the API exists)
+│       ├── theme.js         # Shared colour palette
+│       ├── skeleton.jsx     # UI design draft — board
+│       ├── Login.jsx        # UI design draft — login
+│       └── Create_account.jsx  # UI design draft — sign up
+└── server/                  # Backend — not yet implemented
+```
 
-## Local Setup
+The `.jsx` design drafts at the root of `src/` are Tailwind reference mockups, not part of the running app. The live components are styled to match them.
+
+## Getting Started
 
 ### Prerequisites
-* Docker and Docker Compose installed.
 
-### Running with Docker (Recommended)
+* **Node.js 20.19+ or 22.12+** (developed on Node 22)
+* npm
+
+No database, Docker, or backend setup is required — the frontend runs standalone.
+
+### Run the app
+
 1. Clone the repository:
    ```bash
-   git clone https://github.com/lynx7843/SyncSpace.git
-   cd SyncSpace
+   git clone https://github.com/lynx7843/CollabBoard.git
+   cd CollabBoard
    ```
-2. Start the application:
+2. Install the frontend dependencies:
    ```bash
-   docker-compose up --build
+   cd client
+   npm install
    ```
-3. Open `http://localhost:3000` in your browser. The API will run on `http://localhost:5000`
+3. Start the dev server:
+   ```bash
+   npm run dev
+   ```
+4. Open **http://localhost:5173** in your browser.
+
+### Other commands
+
+Run these from the `client/` directory:
+
+```bash
+npm run build     # production build
+npm run preview   # serve the production build locally
+npm run lint      # ESLint
+```
+
+## Demo Mode
+
+Because there is no API yet, the client ships with demo mode enabled. It short-circuits only the calls that would fail — nothing else is faked.
+
+**Log in with:**
+
+| Field | Value |
+| --- | --- |
+| Username | `user` |
+| Password | `password` |
+
+These are also shown on the login screen. Any other credentials produce an error naming the field that was wrong.
+
+What demo mode changes:
+
+* Login accepts the credentials above without a server; **any** submission on the create-account screen reports that the backend is not implemented.
+* The board renders seeded sample tasks, and edits are held in memory only — they do not survive a reload.
+* The member list is pre-populated; invites and removals update local state only.
+* The Socket.io connection and the board's initial `GET` are skipped, so the console stays clean.
+
+Demo mode is controlled by a single flag in `client/src/demo/demoMode.js`. Turn it off once the API exists:
+
+```bash
+# client/.env
+VITE_DEMO_MODE=false
+```
+
+> ⚠️ While demo mode is on, login accepts the hard-coded credentials with no server. Disable it before deploying anything real.
+
+The Vite dev server already proxies `/api` to `http://localhost:5000`, so the client is ready to talk to a backend as soon as one is running.
+
+## Contributors
+
+| Role | Name |
+| --- | --- |
+| name | example |
+| name | example |
+| name | example |
+| name | example |
+| name | example |
+| name | example |
+| name | example |
+| name | example |
+| name | example |
 
 ## Known Limitations
 
-- Offline Syncing Delay: Reconnecting after a long offline period may take a few seconds to merge complex conflicts.
-- Mobile View: The drag-and-drop interface is currently optimized for desktop web browsers.
-
+* **No persistence:** With no backend, all board and member changes are lost on refresh.
+* **No real-time sync:** Multiple browser tabs do not see each other's changes.
+* **No drag-and-drop:** Tasks are moved with the **Change** button on each card.
+* **Desktop-first:** The layout is optimised for desktop browsers.
