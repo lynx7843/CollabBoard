@@ -15,6 +15,12 @@ export const DEMO_MODE = import.meta.env.VITE_DEMO_MODE !== 'false';
 
 export const DEMO_TOKEN = 'demo-token';
 
+// The only credentials the demo login accepts, shown as a hint on the form.
+export const DEMO_CREDENTIALS = {
+  username: 'user',
+  password: 'password',
+};
+
 export const DEMO_USER = {
   _id: 'demo-user',
   name: 'Demo User',
