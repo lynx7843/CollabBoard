@@ -26,6 +26,12 @@ html, body, #root {
   background-color: #fef9c3;
 }
 
+/* Blocked-out nav item ("Coming soon") — stays inert on hover */
+.cb-nav-item.cb-disabled:hover {
+  background-color: transparent;
+  color: #9ca3af;
+}
+
 .cb-nav-item:focus-visible,
 .cb-icon-btn:focus-visible,
 .cb-col-menu:focus-visible,
@@ -57,6 +63,21 @@ html, body, #root {
   border-color: #facc15;
   background-color: #fefce8;
   color: #000000;
+}
+
+/* Per-task Change / Delete / move-target buttons */
+.cb-task-action:hover {
+  background-color: #f3f4f6;
+  color: #000000;
+}
+
+.cb-task-delete:hover {
+  background-color: #fee2e2;
+}
+
+.cb-move-option:hover {
+  border-color: #facc15;
+  background-color: #fefce8;
 }
 
 /* Primary "New Task" button */

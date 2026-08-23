@@ -9,8 +9,20 @@ import { colors } from '../theme';
 const NAV_ITEMS = [
   { id: 'boards', label: 'Boards', icon: LayoutGrid, to: '/boards' },
   { id: 'members', label: 'Members', icon: Users, to: '/members' },
-  { id: 'settings', label: 'Settings', icon: Settings },
+  { id: 'settings', label: 'Settings', icon: Settings, disabled: true, badge: 'Coming soon' },
 ];
+
+const badgeStyle = {
+  marginLeft: 'auto',
+  padding: '2px 8px',
+  borderRadius: '9999px',
+  backgroundColor: colors.gray100,
+  border: `1px solid ${colors.gray200}`,
+  color: colors.gray500,
+  fontSize: '11px',
+  fontWeight: '600',
+  whiteSpace: 'nowrap',
+};
 
 export const Sidebar = () => {
   const location = useLocation();
@@ -56,7 +68,7 @@ export const Sidebar = () => {
 
       {/* Navigation Links */}
       <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        {NAV_ITEMS.map(({ id, label, icon: Icon, to }) => {
+        {NAV_ITEMS.map(({ id, label, icon: Icon, to, disabled, badge }) => {
           const active = Boolean(to) && location.pathname.startsWith(to);
           const itemStyle = {
             display: 'flex',
@@ -69,23 +81,38 @@ export const Sidebar = () => {
             fontSize: '14px',
             textDecoration: 'none',
             border: 'none',
-            cursor: 'pointer',
+            background: 'transparent',
+            cursor: disabled ? 'not-allowed' : 'pointer',
             transition: 'background-color 150ms, color 150ms',
             backgroundColor: active ? colors.yellow100 : 'transparent',
             fontWeight: active ? '600' : '500',
-            color: active ? colors.black : colors.gray600
+            color: disabled ? colors.gray400 : active ? colors.black : colors.gray600
           };
-          const className = `cb-nav-item${active ? ' cb-active' : ''}`;
+          const className = `cb-nav-item${active ? ' cb-active' : ''}${disabled ? ' cb-disabled' : ''}`;
+
+          const content = (
+            <>
+              <Icon size={20} />
+              {label}
+              {badge && <span style={badgeStyle}>{badge}</span>}
+            </>
+          );
+
+          if (disabled) {
+            return (
+              <button key={id} type="button" disabled aria-disabled="true" className={className} style={itemStyle}>
+                {content}
+              </button>
+            );
+          }
 
           return to ? (
             <Link key={id} to={to} className={className} style={itemStyle}>
-              <Icon size={20} />
-              {label}
+              {content}
             </Link>
           ) : (
             <button key={id} type="button" className={className} style={itemStyle}>
-              <Icon size={20} />
-              {label}
+              {content}
             </button>
           );
         })}
