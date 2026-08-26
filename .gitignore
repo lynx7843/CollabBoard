@@ -1,7 +1,5 @@
 node_modules/
 
-# Every env file is a secret by default. The negation keeps the committed
-# templates, which carry key names and placeholders only — never real values.
 .env*
 !.env.example
 !.env.*.example
