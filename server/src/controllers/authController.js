@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
@@ -5,7 +6,7 @@ const env = require('../config/env');
 const { signAuthToken } = require('../utils/token');
 const { publicUser } = require('../utils/publicUser');
 const { avatarColorFor } = require('../utils/avatarColor');
-const { validateRegister } = require('../validators/authValidator');
+const { validateRegister, validateLogin } = require('../validators/authValidator');
 
 /*
  * POST /api/auth/register
@@ -51,6 +52,59 @@ async function register(req, res) {
   });
 }
 
+/*
+ * POST /api/auth/login
+ *
+ * Body    { username | email, password }
+ * 200     { token, user }   -> LoginForm.jsx:55 feeds both to loginSession()
+ * 400     { message }       missing field
+ * 401     { message }       wrong credentials
+ */
+async function login(req, res) {
+  const { identifier, password } = validateLogin(req.body);
+
+  // username and email are both stored lowercased, and `identifier` arrives
+  // lowercased, so one query covers "logged in with either".
+  const user = await User.findOne({ $or: [{ username: identifier }, { email: identifier }] }).select(
+    '+passwordHash',
+  );
+
+  // Compare against a decoy hash when there is no such account, so a miss costs
+  // the same wall-clock time as a wrong password. Skipping it would let an
+  // attacker enumerate valid usernames by timing alone.
+  const matches = user
+    ? await bcrypt.compare(password, user.passwordHash)
+    : await bcrypt.compare(password, await decoyHash());
+
+  // One message for "no such user" and for "wrong password": telling them apart
+  // confirms which usernames exist. The text matches LoginForm.jsx:52's own
+  // fallback, so the form reads the same either way.
+  if (!user || !matches) {
+    throw ApiError.unauthorized('Invalid username or password.');
+  }
+
+  user.lastLoginAt = new Date();
+  await user.save();
+
+  res.json({
+    token: signAuthToken(user),
+    user: publicUser(user),
+  });
+}
+
+/*
+ * A real bcrypt hash of a value nobody knows, built once on first use at the
+ * configured cost so its verify time tracks a genuine one. Computed lazily
+ * rather than at import so requiring this module stays cheap.
+ */
+let decoyHashPromise;
+function decoyHash() {
+  if (!decoyHashPromise) {
+    decoyHashPromise = bcrypt.hash(crypto.randomBytes(32).toString('hex'), env.bcryptRounds);
+  }
+  return decoyHashPromise;
+}
+
 function duplicateError(field) {
   const message =
     field === 'username'
@@ -86,4 +140,4 @@ function translateWriteError(err) {
   return err;
 }
 
-module.exports = { register };
+module.exports = { register, login };
