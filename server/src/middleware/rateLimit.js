@@ -17,4 +17,21 @@ const registerLimiter = rateLimit({
   message: { message: 'Too many accounts created from this address. Try again later.' },
 });
 
-module.exports = { registerLimiter };
+/*
+ * Login is the brute-force target: unlike registration, an attacker gets a
+ * useful signal from each attempt. Keyed per IP and tighter than register.
+ *
+ * Successful logins do not count against the limit, so a user with a working
+ * password is never locked out by someone else guessing from the same NAT.
+ */
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  skip: () => env.isTest,
+  message: { message: 'Too many login attempts. Try again in a few minutes.' },
+});
+
+module.exports = { registerLimiter, loginLimiter };

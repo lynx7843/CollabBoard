@@ -86,4 +86,28 @@ function validateRegister(body = {}) {
   };
 }
 
-module.exports = { validateRegister };
+/*
+ * Normalise and validate the body of POST /api/auth/login.
+ *
+ * LoginForm.jsx:46 posts { username, password }, but the typed value may be
+ * either a username or an email — schema.txt asks the handler to accept both,
+ * and users reliably type whichever they remember. `email` is accepted as a
+ * field name too, for a caller that is explicit about it.
+ *
+ * Validation here is deliberately shallow: only that both fields are present
+ * and are strings. Applying the registration rules (length, charset) would let
+ * an attacker tell "no such account" from "malformed username", and a user
+ * whose account predates a rule change could no longer log in.
+ */
+function validateLogin(body = {}) {
+  const identifier = (asString(body.username).trim() || asString(body.email).trim()).toLowerCase();
+  const password = asString(body.password);
+
+  if (!identifier || !password) {
+    throw ApiError.badRequest('Username and password are required.');
+  }
+
+  return { identifier, password };
+}
+
+module.exports = { validateRegister, validateLogin };
