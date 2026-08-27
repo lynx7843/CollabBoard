@@ -1,66 +1,71 @@
 import { useState } from 'react';
 import { DEMO_MODE, DEMO_MEMBERS } from '../demo/demoMode';
 
-export const MemberManager = ({ boardId, initialMembers = [] }) => {
+// `boardId` is still passed by App.jsx but is not read: nothing here talks to a
+// board endpoint yet. Destructure it again when the board API lands.
+export const MemberManager = ({ initialMembers = [] }) => {
   // No GET /members endpoint exists yet, so seed the list for the demo.
   const [members, setMembers] = useState(
     DEMO_MODE && initialMembers.length === 0 ? DEMO_MEMBERS : initialMembers
   );
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState('');
+  const [inviting, setInviting] = useState(false);
 
   const handleAdd = async (e) => {
     e.preventDefault();
+    setStatus('');
+
+    const typed = email.trim().toLowerCase();
 
     if (DEMO_MODE) {
-      setMembers((prev) => [...prev, { _id: `demo-${Date.now()}`, email }]);
+      setMembers((prev) => [...prev, { _id: `demo-${Date.now()}`, email: typed }]);
       setEmail('');
       setStatus('Member added successfully.');
       return;
     }
 
+    if (members.some((m) => m.email?.toLowerCase() === typed)) {
+      setStatus('That user is already a member of this board.');
+      return;
+    }
+
+    setInviting(true);
+
     try {
+      // There is no board membership endpoint yet, so the invite resolves the
+      // address to a registered account and holds the result in local state.
+      // Swap this for POST /api/boards/:id/members once boards are persisted.
       const token = localStorage.getItem('token');
-      const res = await fetch(`/api/boards/${boardId}/members`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ email }),
+      const res = await fetch(`/api/users/lookup?email=${encodeURIComponent(typed)}`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!res.ok) throw new Error('User not found or unable to add');
-      const addedUser = await res.json();
+      const data = await res.json();
 
-      setMembers((prev) => [...prev, addedUser]);
+      // The server sends 'User not found.' for a 404; anything else it says is
+      // already written to be shown as-is.
+      if (!res.ok) throw new Error(data.message || 'Unable to add that member.');
+
+      setMembers((prev) => [...prev, data.user]);
       setEmail('');
-      setStatus('Member added successfully.');
+      setStatus(`${data.user.name} added to the board.`);
     } catch (err) {
       setStatus(err.message);
+    } finally {
+      setInviting(false);
     }
   };
 
-  const handleRemove = async (memberId) => {
-    const previous = [...members];
+  const handleRemove = (memberId) => {
+    const member = members.find((m) => m._id === memberId);
+
+    // Membership lives in this component's state — there is no board API to
+    // call, and no DELETE that would succeed. Removing a member only drops them
+    // from this list; their account in the users collection is untouched.
+    // Swap this for DELETE /api/boards/:id/members/:id once boards are persisted.
     setMembers((prev) => prev.filter((m) => m._id !== memberId));
-
-    if (DEMO_MODE) {
-      setStatus('Member removed.');
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`/api/boards/${boardId}/members/${memberId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error('Failed to remove member on server');
-    } catch (err) {
-      setMembers(previous);
-      setStatus(err.message);
-    }
+    setStatus(`${member?.name || member?.email || 'Member'} removed from the board.`);
   };
 
   return (
@@ -147,6 +152,7 @@ export const MemberManager = ({ boardId, initialMembers = [] }) => {
         />
         <button 
           type="submit"
+          disabled={inviting}
           style={{ 
             backgroundColor: '#ebd673', 
             border: 'none', 
@@ -155,10 +161,11 @@ export const MemberManager = ({ boardId, initialMembers = [] }) => {
             fontWeight: 'bold', 
             fontSize: '14px',
             cursor: 'pointer',
-            color: '#1a1a1a'
+            color: '#1a1a1a',
+            opacity: inviting ? 0.6 : 1
           }}
         >
-          Invite
+          {inviting ? 'Checking...' : 'Invite'}
         </button>
       </form>
     </div>
