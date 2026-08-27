@@ -1,15 +1,10 @@
+/*
+ * A board starts empty — its tasks are loaded from
+ * GET /api/boards/:slug/tasks and applied with TASKS_LOADED, so a newly
+ * created board renders three empty columns rather than sample cards.
+ */
 export const initialState = {
-  columns: {
-    todo: [
-      { id: '1', title: 'test1', description: 'test1', priority: 'High Priority', status: 'todo' }
-    ],
-    doing: [
-      { id: '2', title: 'test2', description: 'test2', priority: 'In Progress', status: 'doing' }
-    ],
-    done: [
-      { id: '3', title: 'test3', description: 'test3', priority: 'Completed', date: 'Oct 12', status: 'done' }
-    ]
-  },
+  columns: { todo: [], doing: [], done: [] },
   loading: false,
   error: null,
 };
@@ -23,6 +18,19 @@ const isSameTask = (task, updated) =>
 
 export function boardReducer(state, action) {
   switch (action.type) {
+    // Replaces every column at once with what the server holds.
+    case 'TASKS_LOADED':
+      return {
+        ...state,
+        columns: { todo: [], doing: [], done: [], ...action.payload },
+        loading: false,
+        error: null,
+      };
+
+    // Back to empty while a different board's tasks are being fetched, so the
+    // previous board's cards never show under the new board's name.
+    case 'BOARD_CHANGED':
+      return { ...initialState, loading: true };
     case 'TASK_CREATED': {
       const status = action.payload.status || 'todo';
       return {

@@ -1,7 +1,9 @@
-import { useReducer, useState } from 'react';
+import { useCallback, useEffect, useReducer, useState } from 'react';
 import { Plus, Pencil, MoreHorizontal, CheckCircle2 } from 'lucide-react';
 import { boardReducer, initialState } from '../reducers/boardReducer';
 import { useBoardSockets } from '../hooks/useBoardSockets';
+import { api } from '../api';
+import { DEMO_MODE } from '../demo/demoMode';
 import { colors, shadowSm } from '../theme';
 
 const COLUMN_META = {
@@ -250,21 +252,58 @@ const promptForTask = (status) => {
   };
 };
 
-export const BoardView = ({ boardId = 'group-13', submitAction }) => {
+export const BoardView = ({ boardId, board, submitAction }) => {
   const [state, dispatch] = useReducer(boardReducer, initialState);
+  const [error, setError] = useState('');
 
   // Keep the board in sync with real-time task events from other clients.
   useBoardSockets(boardId, dispatch);
 
-  const handleAddTask = async (status) => {
-    const task = promptForTask(status);
-    if (!task) return;
+  const loadTasks = useCallback(async () => {
+    if (DEMO_MODE) return;
+    dispatch({ type: 'BOARD_CHANGED' });
+    try {
+      const { columns } = await api(`/boards/${boardId}/tasks`);
+      dispatch({ type: 'TASKS_LOADED', payload: columns });
+      setError('');
+    } catch (err) {
+      setError(err.message);
+    }
+  }, [boardId]);
 
-    // Optimistically reflect the new task locally, then persist it
-    // (submitAction handles offline queueing/sync when a backend is present).
-    dispatch({ type: 'TASK_CREATED', payload: task });
-    if (submitAction) {
-      await submitAction({ type: 'CREATE_TASK', status, task });
+  // Tasks belong to the board in the URL, so switching tabs refetches rather
+  // than carrying the previous board's cards across.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadTasks();
+  }, [loadTasks]);
+
+  const handleAddTask = async (status) => {
+    const draft = promptForTask(status);
+    if (!draft) return;
+
+    if (DEMO_MODE) {
+      dispatch({ type: 'TASK_CREATED', payload: draft });
+      if (submitAction) await submitAction({ type: 'CREATE_TASK', status, task: draft });
+      return;
+    }
+
+    try {
+      const { task } = await api(`/boards/${boardId}/tasks`, {
+        method: 'POST',
+        body: {
+          title: draft.title,
+          description: draft.description,
+          status,
+          priority: draft.priority,
+        },
+      });
+      // Dispatched with the server's task, so the card carries the real _id
+      // that every later edit is addressed by.
+      dispatch({ type: 'TASK_CREATED', payload: task });
+      setError('');
+    } catch (err) {
+      setError(err.message);
     }
   };
 
@@ -275,9 +314,25 @@ export const BoardView = ({ boardId = 'group-13', submitAction }) => {
     if (description === null) return;
 
     const updated = { ...task, title: title || task.title, description };
+
+    // Show the edit immediately; the server is the authority on what stuck.
     dispatch({ type: 'TASK_UPDATED', payload: updated });
-    if (submitAction) {
-      await submitAction({ type: 'UPDATE_TASK', taskId: task.id || task._id, task: updated });
+
+    if (DEMO_MODE) {
+      if (submitAction) await submitAction({ type: 'UPDATE_TASK', taskId: task.id || task._id, task: updated });
+      return;
+    }
+
+    try {
+      const saved = await api(`/boards/${boardId}/tasks/${task._id}`, {
+        method: 'PATCH',
+        body: { title: updated.title, description },
+      });
+      dispatch({ type: 'TASK_UPDATED', payload: saved.task });
+      setError('');
+    } catch (err) {
+      setError(err.message);
+      loadTasks();
     }
   };
 
@@ -289,8 +344,20 @@ export const BoardView = ({ boardId = 'group-13', submitAction }) => {
     // Keep the badge in step with the column the task now sits in.
     dispatch({ type: 'TASK_UPDATED', payload: { ...task, status: to, priority: priorityFor(to) } });
 
-    if (submitAction) {
-      await submitAction({ type: 'MOVE_TASK', taskId, from, to });
+    if (DEMO_MODE) {
+      if (submitAction) await submitAction({ type: 'MOVE_TASK', taskId, from, to });
+      return;
+    }
+
+    try {
+      await api(`/boards/${boardId}/tasks/${task._id}`, {
+        method: 'PATCH',
+        body: { status: to, priority: priorityFor(to) },
+      });
+      setError('');
+    } catch (err) {
+      setError(err.message);
+      loadTasks();
     }
   };
 
@@ -299,43 +366,46 @@ export const BoardView = ({ boardId = 'group-13', submitAction }) => {
     const taskId = task.id || task._id;
 
     dispatch({ type: 'TASK_DELETED', payload: taskId });
-    if (submitAction) {
-      await submitAction({ type: 'DELETE_TASK', taskId });
+
+    if (DEMO_MODE) {
+      if (submitAction) await submitAction({ type: 'DELETE_TASK', taskId });
+      return;
+    }
+
+    try {
+      await api(`/boards/${boardId}/tasks/${task._id}`, { method: 'DELETE' });
+      setError('');
+    } catch (err) {
+      setError(err.message);
+      loadTasks();
     }
   };
 
   return (
     <div>
       {/* Board Header */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', marginBottom: '32px' }}>
-        <div>
-          <h2 style={{ fontSize: '36px', fontWeight: 'bold', letterSpacing: '-0.025em', color: colors.black }}>
-            Q3 Roadmap
-          </h2>
-          <p style={{ marginTop: '4px', color: colors.gray500 }}>Manage all upcoming features and fixes.</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => handleAddTask('todo')}
-          className="cb-new-task"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            backgroundColor: colors.yellow400,
-            border: 'none',
-            padding: '12px 20px',
-            borderRadius: '8px',
-            fontWeight: '600',
-            fontSize: '14px',
-            color: colors.black,
-            cursor: 'pointer',
-            transition: 'background-color 150ms'
-          }}>
-          <Plus size={16} />
-          New Task
-        </button>
+      <div style={{ marginBottom: '32px' }}>
+        <h2 style={{ fontSize: '36px', fontWeight: 'bold', letterSpacing: '-0.025em', color: colors.black }}>
+          {board?.name || 'Board'}
+        </h2>
+        {board?.description && (
+          <p style={{ marginTop: '4px', color: colors.gray500 }}>{board.description}</p>
+        )}
       </div>
+
+      {error && (
+        <div style={{
+          marginBottom: '16px',
+          padding: '10px 14px',
+          borderRadius: '8px',
+          backgroundColor: '#FEE2E2',
+          border: '1px solid #FECACA',
+          color: '#DC2626',
+          fontSize: '13px'
+        }}>
+          {error}
+        </div>
+      )}
 
       {/* Kanban Columns Layout */}
       <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>

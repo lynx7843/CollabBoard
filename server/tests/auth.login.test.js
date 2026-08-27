@@ -33,6 +33,7 @@ describe('POST /api/auth/login', () => {
           username: 'sayuni',
           email: 'sayuni@collabboard.app',
           avatarColor: expect.stringMatching(/^#[0-9A-F]{6}$/i),
+          isAdmin: false,
           createdAt: expect.any(String),
         },
       });

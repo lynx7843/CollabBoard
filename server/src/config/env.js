@@ -48,6 +48,16 @@ const env = {
   get jwtExpiresIn() {
     return process.env.JWT_EXPIRES_IN || '7d';
   },
+  /*
+   * The single account allowed to create and delete boards. Everyone else can
+   * only work inside a board they have been invited to. Kept in the environment
+   * rather than a role column so the group leader can change without a
+   * migration; swap this for a proper role on User if the app grows more than
+   * one privileged action.
+   */
+  get adminUsername() {
+    return (process.env.ADMIN_USERNAME || 'dilan').trim().toLowerCase();
+  },
   get bcryptRounds() {
     return toInt(process.env.BCRYPT_ROUNDS, 12);
   },

@@ -110,3 +110,19 @@ html, body, #root {
 .cb-link:hover {
   text-decoration-color: #000000;
 }
+
+/* Board tabs */
+.cb-tab:hover {
+  background-color: #fefce8;
+}
+
+.cb-tab-close:hover {
+  background-color: #fee2e2;
+  color: #dc2626;
+}
+
+.cb-tab-new:hover {
+  border-color: #facc15;
+  background-color: #fefce8;
+  color: #000000;
+}
