@@ -1,52 +1,66 @@
 const Board = require('../models/Board');
+const Task = require('../models/Task');
 const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
+const env = require('../config/env');
 const { publicUser } = require('../utils/publicUser');
 const { EMAIL_PATTERN } = require('../utils/patterns');
 
-/*
- * Board membership.
- *
- * There is no "create board" screen yet — the client addresses a single board by
- * the slug hardcoded in App.jsx:12. So the first signed-in user to open that
- * slug creates it and becomes its owner; everyone else is added by invitation.
- * Replace loadOrCreateBoard with a plain lookup once boards can be created in
- * the UI.
- */
-async function loadOrCreateBoard(slug, user) {
-  const existing = await Board.findOne({ slug });
-  if (existing) return existing;
+// Boards a single owner may hold at once. The client greys out "+ New Board" at
+// this number; this is the check that actually enforces it.
+const MAX_BOARDS = 5;
 
-  try {
-    return await Board.create({
-      slug,
-      name: slug,
-      owner: user._id,
-      members: [user._id],
-    });
-  } catch (err) {
-    // Two first-visits raced; the unique index rejected the loser, so read the
-    // winner's document rather than failing a request that can still be served.
-    if (err && err.code === 11000) return Board.findOne({ slug });
-    throw err;
+const isAdmin = (user) => user.username === env.adminUsername;
+
+function requireAdmin(user) {
+  if (!isAdmin(user)) {
+    throw ApiError.forbidden('Only the board admin can create or delete boards.');
   }
 }
 
 /*
- * Every route here needs the same two things: the board, and the guarantee that
- * the caller belongs to it. A non-member gets 404 rather than 403 — telling them
- * the board exists is itself information they have no claim to.
+ * A URL-safe id derived from the board's name, so the client's routes read
+ * /boards/q3-roadmap rather than an ObjectId. A numeric suffix is appended
+ * until it is unique, which also covers two boards sharing a name.
+ */
+async function uniqueSlug(name) {
+  const base =
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40) || 'board';
+
+  for (let n = 0; n < 50; n += 1) {
+    const candidate = n === 0 ? base : `${base}-${n + 1}`;
+    // eslint-disable-next-line no-await-in-loop -- candidates must be tried in order.
+    if (!(await Board.exists({ slug: candidate }))) return candidate;
+  }
+
+  return `${base}-${Date.now()}`;
+}
+
+function boardSummary(board) {
+  return {
+    _id: String(board._id),
+    slug: board.slug,
+    name: board.name,
+    description: board.description || '',
+    owner: String(board.owner),
+    memberCount: board.members?.length ?? 0,
+    createdAt: board.createdAt,
+  };
+}
+
+/*
+ * Loads a board the caller is entitled to see.
+ *
+ * A non-member gets 404 rather than 403: confirming that a board exists is
+ * itself information they have no claim to.
  */
 async function loadBoardForMember(req) {
   const slug = String(req.params.boardId || '').trim().toLowerCase();
-
-  // Checked before it reaches the model, so a junk slug is a 404 rather than a
-  // schema validation error surfacing as a 500.
-  if (!/^[a-z0-9_-]{1,60}$/.test(slug)) {
-    throw ApiError.notFound('Board not found.');
-  }
-
-  const board = await loadOrCreateBoard(slug, req.user);
+  const board = slug ? await Board.findOne({ slug }) : null;
 
   if (!board || !board.hasMember(req.user._id)) {
     throw ApiError.notFound('Board not found.');
@@ -55,10 +69,86 @@ async function loadBoardForMember(req) {
   return board;
 }
 
-function membersOf(board) {
-  // populate() returns the ids unchanged for anything it could not resolve, so
-  // drop entries whose account has since been deleted.
-  return board.members.filter((m) => m && m.email).map(publicUser);
+/*
+ * GET /api/boards
+ * 200  { boards: [...], maxBoards, canCreate }
+ *
+ * Everything the caller can open, which is what the client renders as its tab
+ * strip. Ordered oldest first so the tabs keep a stable order across reloads.
+ */
+async function listBoards(req, res) {
+  const boards = await Board.find({ members: req.user._id }).sort({ createdAt: 1 });
+  const owned = boards.filter((b) => String(b.owner) === String(req.user._id)).length;
+
+  res.json({
+    boards: boards.map(boardSummary),
+    maxBoards: MAX_BOARDS,
+    // Only the admin ever sees the create button, and only below the cap.
+    canCreate: isAdmin(req.user) && owned < MAX_BOARDS,
+  });
+}
+
+/*
+ * POST /api/boards    Body { name, description? }
+ * 201  { board }
+ * 403  { message }   not the admin
+ * 409  { message }   the cap is reached
+ */
+async function createBoard(req, res) {
+  requireAdmin(req.user);
+
+  const name = String(req.body.name || '').trim();
+  const description = String(req.body.description || '').trim();
+
+  if (!name) {
+    throw ApiError.badRequest('Give the board a name.');
+  }
+  if (name.length > 80) {
+    throw ApiError.badRequest('Board name must be 80 characters or fewer.');
+  }
+  if (description.length > 280) {
+    throw ApiError.badRequest('Description must be 280 characters or fewer.');
+  }
+
+  const owned = await Board.countDocuments({ owner: req.user._id });
+  if (owned >= MAX_BOARDS) {
+    throw ApiError.conflict(
+      `You have reached the maximum of ${MAX_BOARDS} boards. Delete one to create another.`,
+    );
+  }
+
+  const board = await Board.create({
+    slug: await uniqueSlug(name),
+    name,
+    description,
+    owner: req.user._id,
+    members: [req.user._id],
+  });
+
+  res.status(201).json({ board: boardSummary(board) });
+}
+
+/*
+ * DELETE /api/boards/:boardId
+ * 200  { deleted }
+ * 403  { message }   not the admin, or not this board's owner
+ *
+ * Deletes the board and its tasks. Member accounts are untouched — they are
+ * only referenced by the board, never owned by it.
+ */
+async function deleteBoard(req, res) {
+  requireAdmin(req.user);
+
+  const board = await loadBoardForMember(req);
+
+  if (String(board.owner) !== String(req.user._id)) {
+    throw ApiError.forbidden('Only the board owner can delete this board.');
+  }
+
+  await Task.deleteMany({ board: board._id });
+  await Board.deleteOne({ _id: board._id });
+
+  res.json({ deleted: board.slug });
 }
 
 /*
@@ -69,14 +159,18 @@ async function listMembers(req, res) {
   const board = await loadBoardForMember(req);
   await board.populate('members');
 
-  res.json({ members: membersOf(board) });
+  // populate() leaves an id in place for anything it could not resolve, so drop
+  // entries whose account has since been deleted.
+  const members = board.members.filter((m) => m && m.email).map(publicUser);
+
+  res.json({ members });
 }
 
 /*
  * POST /api/boards/:boardId/members    Body { email }
- * 201  { user }          the account just added
- * 404  { message }       'User not found.'  -> shown verbatim by the invite form
- * 409  { message }       already a member
+ * 201  { user }
+ * 404  { message }   'User not found.'  -> shown verbatim by the invite form
+ * 409  { message }   already a member
  */
 async function addMember(req, res) {
   const board = await loadBoardForMember(req);
@@ -107,7 +201,6 @@ async function addMember(req, res) {
 /*
  * DELETE /api/boards/:boardId/members/:userId
  * 200  { removed }
- * 403  { message }   the owner cannot be removed
  *
  * Removes the membership only. The account itself is never touched — a removed
  * member keeps their login and can be invited back.
@@ -128,4 +221,13 @@ async function removeMember(req, res) {
   res.json({ removed: String(userId) });
 }
 
-module.exports = { listMembers, addMember, removeMember };
+module.exports = {
+  listBoards,
+  createBoard,
+  deleteBoard,
+  listMembers,
+  addMember,
+  removeMember,
+  loadBoardForMember,
+  MAX_BOARDS,
+};

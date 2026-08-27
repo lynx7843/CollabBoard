@@ -6,9 +6,10 @@ import { colors } from '../theme';
 
 // `to` is omitted for destinations that have no route yet; those render as
 // inert buttons rather than links that would bounce to the catch-all redirect.
-const NAV_ITEMS = [
-  { id: 'boards', label: 'Boards', icon: LayoutGrid, to: '/boards' },
-  { id: 'members', label: 'Members', icon: Users, to: '/members' },
+// `to` is built per board so the Members link opens the board that is open.
+const navItems = (slug) => [
+  { id: 'boards', label: 'Boards', icon: LayoutGrid, to: slug ? `/boards/${slug}` : '/boards' },
+  { id: 'members', label: 'Members', icon: Users, to: slug ? `/members/${slug}` : '/members' },
   { id: 'settings', label: 'Settings', icon: Settings, disabled: true, badge: 'Coming soon' },
 ];
 
@@ -24,10 +25,11 @@ const badgeStyle = {
   whiteSpace: 'nowrap',
 };
 
-export const Sidebar = () => {
+export const Sidebar = ({ board }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { logout } = useContext(AuthContext);
+  const NAV_ITEMS = navItems(board?.slug);
 
   const handleLogout = () => {
     logout();
@@ -61,8 +63,10 @@ export const Sidebar = () => {
           G13
         </div>
         <div>
-          <p style={{ fontWeight: 'bold', color: colors.black }}>Group 13</p>
-          <p style={{ fontSize: '14px', color: colors.gray500 }}>Fullstack Project</p>
+          <p style={{ fontWeight: 'bold', color: colors.black }}>{board?.name || 'Group 13'}</p>
+          <p style={{ fontSize: '14px', color: colors.gray500 }}>
+            {board?.description || 'Fullstack Project'}
+          </p>
         </div>
       </div>
 

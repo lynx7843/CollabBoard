@@ -2,7 +2,7 @@ import { Navbar } from './Navbar';
 import { Sidebar } from './Sidebar';
 import { colors } from '../theme';
 
-export const BoardLayout = ({ children }) => {
+export const BoardLayout = ({ children, board }) => {
   return (
     <div style={{
       display: 'flex',
@@ -14,7 +14,7 @@ export const BoardLayout = ({ children }) => {
     }}>
       <Navbar />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        <Sidebar />
+        <Sidebar board={board} />
         <main style={{
           flex: 1,
           overflowX: 'auto',
