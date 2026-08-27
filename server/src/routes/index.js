@@ -2,6 +2,7 @@ const { Router } = require('express');
 const mongoose = require('mongoose');
 const authRoutes = require('./authRoutes');
 const userRoutes = require('./userRoutes');
+const boardRoutes = require('./boardRoutes');
 
 const router = Router();
 
@@ -18,5 +19,6 @@ router.get('/health', (_req, res) => {
 
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
+router.use('/boards', boardRoutes);
 
 module.exports = router;
