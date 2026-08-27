@@ -5,6 +5,16 @@ import { AuthContext } from '../../context/AuthContext';
 import { DEMO_MODE, DEMO_TOKEN, DEMO_USER, DEMO_CREDENTIALS } from '../../demo/demoMode';
 import { colors, shadowSm } from '../../theme';
 
+/*
+ * A real account seeded in MongoDB, shown while demo mode is off so the form
+ * stays usable without registering first. Remove before this is deployed
+ * anywhere real — it prints working credentials on the login screen.
+ */
+const TEST_ACCOUNT = {
+  username: 'dilan',
+  password: 'password123',
+};
+
 const LoginForm = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -120,10 +130,15 @@ const LoginForm = () => {
               </div>
             </div>
 
-            {DEMO_MODE && (
+            {DEMO_MODE ? (
               <p style={styles.hint}>
                 Demo login — username: <strong>{DEMO_CREDENTIALS.username}</strong>
                 {'  '}·{'  '}password: <strong>{DEMO_CREDENTIALS.password}</strong>
+              </p>
+            ) : (
+              <p style={styles.hint}>
+                Test account — username: <strong>{TEST_ACCOUNT.username}</strong>
+                {'  '}·{'  '}password: <strong>{TEST_ACCOUNT.password}</strong>
               </p>
             )}
 
