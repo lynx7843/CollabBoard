@@ -1,16 +1,47 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { DEMO_MODE, DEMO_MEMBERS } from '../demo/demoMode';
 
-// `boardId` is still passed by App.jsx but is not read: nothing here talks to a
-// board endpoint yet. Destructure it again when the board API lands.
-export const MemberManager = ({ initialMembers = [] }) => {
-  // No GET /members endpoint exists yet, so seed the list for the demo.
+const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
+
+export const MemberManager = ({ boardId, initialMembers = [] }) => {
   const [members, setMembers] = useState(
     DEMO_MODE && initialMembers.length === 0 ? DEMO_MEMBERS : initialMembers
   );
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState('');
+  const [loading, setLoading] = useState(!DEMO_MODE);
   const [inviting, setInviting] = useState(false);
+
+  // Reads a JSON response and throws the server's own message on a failure, so
+  // every handler below reports what the API actually said.
+  const readJson = async (res) => {
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || 'Something went wrong. Please try again.');
+    return data;
+  };
+
+  // `loading` starts true, so this never has to set it on the way in — which
+  // also keeps the effect below from triggering a cascading render.
+  const loadMembers = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/boards/${boardId}/members`, { headers: authHeaders() });
+      const data = await readJson(res);
+      setMembers(data.members);
+    } catch (err) {
+      setStatus(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [boardId]);
+
+  // The board's membership lives in MongoDB, so load it on mount rather than
+  // starting from whatever the caller passed in.
+  useEffect(() => {
+    // Every setState in loadMembers runs after the awaited fetch, not
+    // synchronously on mount, so the cascading-render warning does not apply.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!DEMO_MODE) loadMembers();
+  }, [loadMembers]);
 
   const handleAdd = async (e) => {
     e.preventDefault();
@@ -25,27 +56,18 @@ export const MemberManager = ({ initialMembers = [] }) => {
       return;
     }
 
-    if (members.some((m) => m.email?.toLowerCase() === typed)) {
-      setStatus('That user is already a member of this board.');
-      return;
-    }
-
     setInviting(true);
 
     try {
-      // There is no board membership endpoint yet, so the invite resolves the
-      // address to a registered account and holds the result in local state.
-      // Swap this for POST /api/boards/:id/members once boards are persisted.
-      const token = localStorage.getItem('token');
-      const res = await fetch(`/api/users/lookup?email=${encodeURIComponent(typed)}`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await fetch(`/api/boards/${boardId}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ email: typed }),
       });
 
-      const data = await res.json();
-
-      // The server sends 'User not found.' for a 404; anything else it says is
-      // already written to be shown as-is.
-      if (!res.ok) throw new Error(data.message || 'Unable to add that member.');
+      // 404 -> 'User not found.', 409 -> already a member; both are written to
+      // be shown to the user as-is.
+      const data = await readJson(res);
 
       setMembers((prev) => [...prev, data.user]);
       setEmail('');
@@ -57,15 +79,33 @@ export const MemberManager = ({ initialMembers = [] }) => {
     }
   };
 
-  const handleRemove = (memberId) => {
+  const handleRemove = async (memberId) => {
+    const previous = members;
     const member = members.find((m) => m._id === memberId);
+    const label = member?.name || member?.email || 'Member';
 
-    // Membership lives in this component's state — there is no board API to
-    // call, and no DELETE that would succeed. Removing a member only drops them
-    // from this list; their account in the users collection is untouched.
-    // Swap this for DELETE /api/boards/:id/members/:id once boards are persisted.
+    // Drop the row immediately; put it back only if the server refuses.
     setMembers((prev) => prev.filter((m) => m._id !== memberId));
-    setStatus(`${member?.name || member?.email || 'Member'} removed from the board.`);
+    setStatus('');
+
+    if (DEMO_MODE) {
+      setStatus(`${label} removed from the board.`);
+      return;
+    }
+
+    try {
+      // Removes the membership only — the account stays in the users
+      // collection and can be invited back.
+      const res = await fetch(`/api/boards/${boardId}/members/${memberId}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      await readJson(res);
+      setStatus(`${label} removed from the board.`);
+    } catch (err) {
+      setMembers(previous);
+      setStatus(err.message);
+    }
   };
 
   return (
@@ -87,6 +127,14 @@ export const MemberManager = ({ initialMembers = [] }) => {
       )}
 
       {/* Member List */}
+      {loading && (
+        <p style={{ margin: '0 0 24px 0', fontSize: '13px', color: '#666' }}>Loading members...</p>
+      )}
+      {!loading && members.length === 0 && (
+        <p style={{ margin: '0 0 24px 0', fontSize: '13px', color: '#666' }}>
+          No members yet. Invite someone by their email address below.
+        </p>
+      )}
       <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 24px 0' }}>
         {members.map((m) => (
           <li key={m._id} style={{ 

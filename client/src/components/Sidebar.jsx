@@ -62,7 +62,7 @@ export const Sidebar = () => {
         </div>
         <div>
           <p style={{ fontWeight: 'bold', color: colors.black }}>Group 13</p>
-          <p style={{ fontSize: '14px', color: colors.gray500 }}>Marketing Project</p>
+          <p style={{ fontSize: '14px', color: colors.gray500 }}>Fullstack Project</p>
         </div>
       </div>
 
