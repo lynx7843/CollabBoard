@@ -34,4 +34,18 @@ const loginLimiter = rateLimit({
   message: { message: 'Too many login attempts. Try again in a few minutes.' },
 });
 
-module.exports = { registerLimiter, loginLimiter };
+/*
+ * The invite lookup answers "does this email have an account?". It is behind
+ * requireAuth, but one signed-in user should still not be able to walk a list of
+ * addresses through it, so cap the attempts per IP.
+ */
+const lookupLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 60,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skip: () => env.isTest,
+  message: { message: 'Too many lookups. Try again in a few minutes.' },
+});
+
+module.exports = { registerLimiter, loginLimiter, lookupLimiter };
