@@ -97,6 +97,30 @@ npm run preview   # serve the production build locally
 npm run lint      # ESLint
 ```
 
+## API Documentation
+
+The server publishes an OpenAPI 3 spec generated from `@openapi` blocks that sit
+directly above each route in `server/src/routes/`, so an endpoint and its
+description are edited in the same place.
+
+With the server running:
+
+| URL | What it is |
+| --- | --- |
+| <http://localhost:5000/api/docs> | Swagger UI — browse every endpoint and call it with **Try it out** |
+| <http://localhost:5000/api/docs.json> | The raw spec, for Postman, Insomnia or client codegen |
+
+Everything except `/health`, `/auth/register` and `/auth/login` needs a bearer
+token: call register or login, copy the returned `token`, and paste it into
+**Authorize** at the top of the page. It is remembered across reloads.
+
+The shared pieces — server list, the JWT scheme, and the `User` / `Board` /
+`Task` / `Error` schemas — live in `server/src/docs/openapi.js`. Set
+`ENABLE_API_DOCS=false` to keep the UI off a deployment.
+
+`server/tests/docs.openapi.test.js` fails if a route is added without an
+`@openapi` block, or if the spec describes a route that no longer exists.
+
 ## Demo Mode
 
 Because there is no API yet, the client ships with demo mode enabled. It short-circuits only the calls that would fail — nothing else is faked.

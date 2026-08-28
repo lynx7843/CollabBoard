@@ -58,6 +58,13 @@ const env = {
   get adminUsername() {
     return (process.env.ADMIN_USERNAME || 'dilan').trim().toLowerCase();
   },
+  /*
+   * Swagger UI at /api/docs. On by default so the documented API is always
+   * browsable; set ENABLE_API_DOCS=false to keep it off a public deployment.
+   */
+  get docsEnabled() {
+    return (process.env.ENABLE_API_DOCS || '').trim().toLowerCase() !== 'false';
+  },
   get bcryptRounds() {
     return toInt(process.env.BCRYPT_ROUNDS, 12);
   },
