@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useState } from 'react';
-import { Plus, Pencil, MoreHorizontal, CheckCircle2 } from 'lucide-react';
+import { Plus, Pencil, CheckCircle2 } from 'lucide-react';
 import { boardReducer, initialState } from '../reducers/boardReducer';
 import { useBoardSockets } from '../hooks/useBoardSockets';
 import { api } from '../api';
@@ -7,67 +7,50 @@ import { DEMO_MODE } from '../demo/demoMode';
 import { colors, shadowSm } from '../theme';
 
 const COLUMN_META = {
-  todo: {
-    title: 'To Do',
-    badge: (task) => ({
-      label: task.priority || 'To Do',
-      bg: colors.yellow100,
-      color: colors.yellow900,
-      border: `1px solid ${colors.yellow300}`,
-    }),
-  },
-  doing: {
-    title: 'Doing',
-    badge: (task) => ({
-      label: task.priority || 'In Progress',
-      bg: colors.black,
-      color: colors.yellow300,
-    }),
-  },
-  done: {
-    title: 'Done',
-    badge: () => ({
-      label: 'Completed',
-      bg: colors.white,
-      color: colors.gray600,
-      border: `1px solid ${colors.gray300}`,
-      icon: true,
-    }),
-  },
+  todo: { title: 'To Do' },
+  doing: { title: 'Doing' },
+  done: { title: 'Done' },
+};
+
+/*
+ * Priority is the task's own property now, chosen when it is created and
+ * editable afterwards. It used to be derived from the column, which is why a
+ * card in Doing read "In Progress" — that said nothing the column did not
+ * already say.
+ */
+const PRIORITIES = {
+  high: { label: 'High', bg: '#fee2e2', color: '#b91c1c', border: '1px solid #fecaca' },
+  medium: { label: 'Medium', bg: colors.yellow100, color: colors.yellow900, border: `1px solid ${colors.yellow300}` },
+  low: { label: 'Low', bg: colors.gray100, color: colors.gray600, border: `1px solid ${colors.gray300}` },
+};
+
+const DEFAULT_PRIORITY = 'medium';
+
+// Tasks created before priorities existed carry free text like "In Progress",
+// so anything unrecognised falls back rather than rendering a blank badge.
+const priorityOf = (task) => (PRIORITIES[task.priority] ? task.priority : DEFAULT_PRIORITY);
+
+// A finished task is muted whatever its priority — the column is the news.
+const badgeFor = (task, isDone) => {
+  const priority = PRIORITIES[priorityOf(task)];
+  return isDone
+    ? { label: priority.label, bg: colors.white, color: colors.gray600, border: `1px solid ${colors.gray300}`, icon: true }
+    : priority;
 };
 
 const ColumnHeader = ({ title, count }) => (
-  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-      <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: colors.black }}>{title}</h2>
-      <span style={{
-        backgroundColor: colors.yellow400,
-        color: colors.black,
-        fontSize: '12px',
-        fontWeight: 'bold',
-        padding: '2px 10px',
-        borderRadius: '9999px'
-      }}>
-        {count}
-      </span>
-    </div>
-    <button
-      type="button"
-      aria-label={`${title} options`}
-      className="cb-col-menu"
-      style={{
-        display: 'flex',
-        padding: '4px',
-        borderRadius: '4px',
-        border: 'none',
-        background: 'transparent',
-        color: colors.gray400,
-        cursor: 'pointer',
-        transition: 'background-color 150ms, color 150ms'
-      }}
-    >
-      <MoreHorizontal size={20} />
-    </button>
+  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+    <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: colors.black }}>{title}</h2>
+    <span style={{
+      backgroundColor: colors.yellow400,
+      color: colors.black,
+      fontSize: '12px',
+      fontWeight: 'bold',
+      padding: '2px 10px',
+      borderRadius: '9999px'
+    }}>
+      {count}
+    </span>
   </div>
 );
 
@@ -80,6 +63,114 @@ const actionButtonStyle = {
   fontWeight: '600',
   cursor: 'pointer',
   transition: 'background-color 150ms, color 150ms',
+};
+
+// Demo mode has no server to hand back an _id, so a card needs a local one to
+// be addressed by. Module scope keeps the impure call out of the component.
+const localTaskId = () => `local-${Date.now()}`;
+
+const fieldStyle = {
+  width: '100%',
+  borderRadius: '8px',
+  border: `1px solid ${colors.gray300}`,
+  padding: '8px 10px',
+  fontSize: '14px',
+  color: colors.black,
+  backgroundColor: colors.white,
+  outline: 'none',
+};
+
+/*
+ * The one place a task's title, description and priority are entered, used both
+ * for a new card and for editing an existing one. Inline rather than a modal so
+ * it appears in the column it belongs to, and so priority can be a real select
+ * instead of a typed answer to a prompt.
+ */
+const TaskForm = ({ task, submitLabel, onSubmit, onCancel }) => {
+  const [title, setTitle] = useState(task?.title || '');
+  const [description, setDescription] = useState(task?.description || '');
+  const [priority, setPriority] = useState(task ? priorityOf(task) : DEFAULT_PRIORITY);
+
+  const submit = (e) => {
+    e.preventDefault();
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    onSubmit({ title: trimmed, description: description.trim(), priority });
+  };
+
+  return (
+    <form
+      onSubmit={submit}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+        borderRadius: '12px',
+        border: `1px solid ${colors.gray300}`,
+        backgroundColor: colors.white,
+        padding: '12px',
+        boxShadow: shadowSm,
+      }}
+    >
+      <input
+        className="cb-input"
+        autoFocus
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="Task title"
+        maxLength={140}
+        required
+        style={fieldStyle}
+      />
+      <input
+        className="cb-input"
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder="Description (optional)"
+        maxLength={2000}
+        style={fieldStyle}
+      />
+
+      <label style={{ fontSize: '13px', fontWeight: '600', color: colors.gray600 }}>
+        Priority
+        <select
+          className="cb-input"
+          value={priority}
+          onChange={(e) => setPriority(e.target.value)}
+          style={{ ...fieldStyle, marginTop: '4px' }}
+        >
+          {Object.entries(PRIORITIES).map(([value, { label }]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+        <button
+          type="button"
+          className="cb-task-action"
+          onClick={onCancel}
+          style={{ ...actionButtonStyle, color: colors.gray500 }}
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          className="cb-new-task"
+          style={{
+            ...actionButtonStyle,
+            backgroundColor: colors.yellow400,
+            color: colors.black,
+            padding: '6px 14px',
+          }}
+        >
+          {submitLabel}
+        </button>
+      </div>
+    </form>
+  );
 };
 
 const TaskCard = ({ task, badge, isDone, status, onEdit, onMove, onDelete }) => {
@@ -117,7 +208,7 @@ const TaskCard = ({ task, badge, isDone, status, onEdit, onMove, onDelete }) => 
       <button
         type="button"
         aria-label={`Edit ${task.title}`}
-        onClick={() => onEdit(task)}
+        onClick={onEdit}
         className="cb-icon-btn"
         style={{
           display: 'flex',
@@ -233,28 +324,13 @@ const AddTaskButton = ({ onClick }) => (
   </button>
 );
 
-// The badge renders `task.priority`, so it has to track the column a task
-// sits in — both when a task is created and when it is moved.
-const priorityFor = (status) =>
-  status === 'done' ? 'Completed' : status === 'doing' ? 'In Progress' : 'High Priority';
-
-// Prompts for a title/description and returns a task object, or null if cancelled.
-const promptForTask = (status) => {
-  const title = window.prompt('Task title:');
-  if (!title) return null;
-  const description = window.prompt('Task description:') || '';
-  return {
-    id: `local-${Date.now()}`,
-    title,
-    description,
-    status,
-    priority: priorityFor(status),
-  };
-};
-
 export const BoardView = ({ boardId, board, submitAction }) => {
   const [state, dispatch] = useReducer(boardReducer, initialState);
   const [error, setError] = useState('');
+  // The column whose "Add Task" form is open, and the task being edited — at
+  // most one of each, so a form never appears in two places at once.
+  const [addingTo, setAddingTo] = useState(null);
+  const [editingId, setEditingId] = useState(null);
 
   // Keep the board in sync with real-time task events from other clients.
   useBoardSockets(boardId, dispatch);
@@ -278,11 +354,11 @@ export const BoardView = ({ boardId, board, submitAction }) => {
     loadTasks();
   }, [loadTasks]);
 
-  const handleAddTask = async (status) => {
-    const draft = promptForTask(status);
-    if (!draft) return;
+  const handleAddTask = async (status, { title, description, priority }) => {
+    setAddingTo(null);
 
     if (DEMO_MODE) {
+      const draft = { id: localTaskId(), title, description, status, priority };
       dispatch({ type: 'TASK_CREATED', payload: draft });
       if (submitAction) await submitAction({ type: 'CREATE_TASK', status, task: draft });
       return;
@@ -291,12 +367,7 @@ export const BoardView = ({ boardId, board, submitAction }) => {
     try {
       const { task } = await api(`/boards/${boardId}/tasks`, {
         method: 'POST',
-        body: {
-          title: draft.title,
-          description: draft.description,
-          status,
-          priority: draft.priority,
-        },
+        body: { title, description, status, priority },
       });
       // Dispatched with the server's task, so the card carries the real _id
       // that every later edit is addressed by.
@@ -307,13 +378,9 @@ export const BoardView = ({ boardId, board, submitAction }) => {
     }
   };
 
-  const handleEditTask = async (task) => {
-    const title = window.prompt('Task title:', task.title);
-    if (title === null) return;
-    const description = window.prompt('Task description:', task.description || '');
-    if (description === null) return;
-
-    const updated = { ...task, title: title || task.title, description };
+  const handleEditTask = async (task, { title, description, priority }) => {
+    setEditingId(null);
+    const updated = { ...task, title, description, priority };
 
     // Show the edit immediately; the server is the authority on what stuck.
     dispatch({ type: 'TASK_UPDATED', payload: updated });
@@ -326,7 +393,7 @@ export const BoardView = ({ boardId, board, submitAction }) => {
     try {
       const saved = await api(`/boards/${boardId}/tasks/${task._id}`, {
         method: 'PATCH',
-        body: { title: updated.title, description },
+        body: { title, description, priority },
       });
       dispatch({ type: 'TASK_UPDATED', payload: saved.task });
       setError('');
@@ -340,9 +407,8 @@ export const BoardView = ({ boardId, board, submitAction }) => {
     if (from === to) return;
     const taskId = task.id || task._id;
 
+    // Priority is the task's own, so a move changes the column and nothing else.
     dispatch({ type: 'TASK_MOVED', payload: { taskId, from, to } });
-    // Keep the badge in step with the column the task now sits in.
-    dispatch({ type: 'TASK_UPDATED', payload: { ...task, status: to, priority: priorityFor(to) } });
 
     if (DEMO_MODE) {
       if (submitAction) await submitAction({ type: 'MOVE_TASK', taskId, from, to });
@@ -352,7 +418,7 @@ export const BoardView = ({ boardId, board, submitAction }) => {
     try {
       await api(`/boards/${boardId}/tasks/${task._id}`, {
         method: 'PATCH',
-        body: { status: to, priority: priorityFor(to) },
+        body: { status: to },
       });
       setError('');
     } catch (err) {
@@ -431,19 +497,42 @@ export const BoardView = ({ boardId, board, submitAction }) => {
               <ColumnHeader title={meta.title} count={tasks.length} />
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {tasks.map((task) => (
-                  <TaskCard
-                    key={task.id || task._id}
-                    task={task}
-                    badge={meta.badge(task)}
-                    isDone={status === 'done'}
-                    status={status}
-                    onEdit={handleEditTask}
-                    onMove={handleMoveTask}
-                    onDelete={handleDeleteTask}
+                {tasks.map((task) => {
+                  const taskId = task.id || task._id;
+
+                  // The form replaces the card it edits, so the values being
+                  // changed stay where the card was.
+                  return taskId === editingId ? (
+                    <TaskForm
+                      key={taskId}
+                      task={task}
+                      submitLabel="Save"
+                      onSubmit={(values) => handleEditTask(task, values)}
+                      onCancel={() => setEditingId(null)}
+                    />
+                  ) : (
+                    <TaskCard
+                      key={taskId}
+                      task={task}
+                      badge={badgeFor(task, status === 'done')}
+                      isDone={status === 'done'}
+                      status={status}
+                      onEdit={() => setEditingId(taskId)}
+                      onMove={handleMoveTask}
+                      onDelete={handleDeleteTask}
+                    />
+                  );
+                })}
+
+                {addingTo === status ? (
+                  <TaskForm
+                    submitLabel="Add task"
+                    onSubmit={(values) => handleAddTask(status, values)}
+                    onCancel={() => setAddingTo(null)}
                   />
-                ))}
-                <AddTaskButton onClick={() => handleAddTask(status)} />
+                ) : (
+                  <AddTaskButton onClick={() => setAddingTo(status)} />
+                )}
               </div>
             </section>
           );

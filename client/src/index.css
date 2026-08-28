@@ -34,7 +34,6 @@ html, body, #root {
 
 .cb-nav-item:focus-visible,
 .cb-icon-btn:focus-visible,
-.cb-col-menu:focus-visible,
 .cb-add-task:focus-visible,
 .cb-profile:focus-visible {
   outline: none;
@@ -48,11 +47,6 @@ html, body, #root {
 }
 
 /* Column overflow (•••) button */
-.cb-col-menu:hover {
-  background-color: #e5e7eb;
-  color: #000000;
-}
-
 /* Task card */
 .cb-card:hover {
   border-color: #facc15;

@@ -96,7 +96,14 @@ const definition = {
           title: { type: 'string', maxLength: 140, example: 'Wire up the invite form' },
           description: { type: 'string', maxLength: 2000 },
           status: { type: 'string', enum: ['todo', 'doing', 'done'] },
-          priority: { type: 'string', maxLength: 40, example: 'high' },
+          priority: {
+            type: 'string',
+            maxLength: 40,
+            example: 'high',
+            description:
+              "The client writes 'high', 'medium' or 'low'. Stored as free text, " +
+              'so tasks created before priorities existed keep their old label.',
+          },
           position: { type: 'integer', description: 'Order within its column.' },
           createdBy: { type: 'string' },
           createdAt: { type: 'string', format: 'date-time' },
