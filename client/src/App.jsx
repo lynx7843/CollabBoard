@@ -94,15 +94,40 @@ function BoardPage() {
   );
 }
 
+/*
+ * Membership for the board in the URL.
+ *
+ * The same tab strip as the boards page, so a board created there is on this
+ * page too and switching boards does not mean going back. The tabs are
+ * read-only here — a board is deleted from the boards page, not from the screen
+ * for managing who is on it.
+ */
 function MembersPage() {
   const { slug } = useParams();
-  const { boards, loading } = useBoards();
-  const board = boards.find((b) => b.slug === slug) || boards[0];
+  const navigate = useNavigate();
+  const { boards, loading, error } = useBoards();
+
+  const activeSlug = slug || boards[0]?.slug;
+  const board = boards.find((b) => b.slug === activeSlug);
 
   return (
     <BoardLayout board={board}>
-      {!loading && !board && <p style={emptyStyle}>No board selected.</p>}
-      {board && <MemberManager boardId={board.slug} />}
+      <BoardTabs
+        boards={boards}
+        activeSlug={activeSlug}
+        canCreate={false}
+        isAdmin={false}
+        onSelect={(next) => navigate(`/members/${next}`)}
+      />
+
+      {error && <p style={emptyStyle}>{error}</p>}
+      {!loading && !error && boards.length === 0 && (
+        <p style={emptyStyle}>
+          You are not a member of any board yet. Ask the group leader to invite you.
+        </p>
+      )}
+
+      {board && <MemberManager boardId={board.slug} board={board} />}
     </BoardLayout>
   );
 }
