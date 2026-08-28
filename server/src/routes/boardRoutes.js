@@ -247,7 +247,11 @@ router.get('/:boardId/tasks', listTasks);
  *               title: { type: string, maxLength: 140 }
  *               description: { type: string, maxLength: 2000 }
  *               status: { type: string, enum: [todo, doing, done], default: todo }
- *               priority: { type: string, maxLength: 40 }
+ *               priority:
+ *                 type: string
+ *                 maxLength: 40
+ *                 description: "'high', 'medium' or 'low'."
+ *                 example: medium
  *     responses:
  *       201:
  *         description: Task created.
@@ -287,7 +291,11 @@ router.post('/:boardId/tasks', createTask);
  *               title: { type: string, maxLength: 140 }
  *               description: { type: string, maxLength: 2000 }
  *               status: { type: string, enum: [todo, doing, done] }
- *               priority: { type: string, maxLength: 40 }
+ *               priority:
+ *                 type: string
+ *                 maxLength: 40
+ *                 description: "'high', 'medium' or 'low'."
+ *                 example: high
  *     responses:
  *       200:
  *         description: The updated task.

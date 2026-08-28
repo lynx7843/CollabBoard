@@ -6,12 +6,31 @@ import { colors } from '../theme';
 
 // `to` is omitted for destinations that have no route yet; those render as
 // inert buttons rather than links that would bounce to the catch-all redirect.
-// `to` is built per board so the Members link opens the board that is open.
+// `to` is built per board so the Members link opens the board that is open,
+// while `section` is the slugless root the highlight is decided by — signing in
+// lands on /boards with no slug, which would never match a `to` carrying one.
 const navItems = (slug) => [
-  { id: 'boards', label: 'Boards', icon: LayoutGrid, to: slug ? `/boards/${slug}` : '/boards' },
-  { id: 'members', label: 'Members', icon: Users, to: slug ? `/members/${slug}` : '/members' },
+  {
+    id: 'boards',
+    label: 'Boards',
+    icon: LayoutGrid,
+    section: '/boards',
+    to: slug ? `/boards/${slug}` : '/boards',
+  },
+  {
+    id: 'members',
+    label: 'Members',
+    icon: Users,
+    section: '/members',
+    to: slug ? `/members/${slug}` : '/members',
+  },
   { id: 'settings', label: 'Settings', icon: Settings, disabled: true, badge: 'Coming soon' },
 ];
+
+// The section root itself, or a board inside it. Tested on the boundary rather
+// than with startsWith alone, so a future /boards-archive is not lit up too.
+const inSection = (pathname, section) =>
+  Boolean(section) && (pathname === section || pathname.startsWith(`${section}/`));
 
 const badgeStyle = {
   marginLeft: 'auto',
@@ -72,8 +91,8 @@ export const Sidebar = ({ board }) => {
 
       {/* Navigation Links */}
       <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        {NAV_ITEMS.map(({ id, label, icon: Icon, to, disabled, badge }) => {
-          const active = Boolean(to) && location.pathname.startsWith(to);
+        {NAV_ITEMS.map(({ id, label, icon: Icon, to, section, disabled, badge }) => {
+          const active = inSection(location.pathname, section);
           const itemStyle = {
             display: 'flex',
             width: '100%',
