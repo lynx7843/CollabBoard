@@ -25,13 +25,17 @@ export const BoardTabs = ({
   return (
     <div style={styles.bar}>
       <div style={styles.tabs}>
-        {boards.map((board) => {
+        {boards.map((board, index) => {
           const active = board.slug === activeSlug;
           return (
             <div
               key={board.slug}
               className={`cb-tab${active ? ' cb-tab-active' : ''}`}
-              style={{ ...styles.tab, ...(active ? styles.tabActive : null) }}
+              style={{
+                ...styles.tab,
+                ...(index === 0 ? styles.tabFirst : null),
+                ...(active ? styles.tabActive : null),
+              }}
             >
               <button
                 type="button"
@@ -132,23 +136,33 @@ const styles = {
   tabs: {
     display: 'flex',
     alignItems: 'flex-end',
-    gap: '4px',
     flexWrap: 'wrap',
     borderBottom: `1px solid ${colors.gray200}`,
   },
+  /*
+   * Square, and butted straight against its neighbour — the yellow rule on the
+   * right edge is what separates one tab from the next, so no gap is needed.
+   */
   tab: {
     display: 'flex',
     alignItems: 'center',
     gap: '4px',
     padding: '8px 8px 8px 14px',
-    borderRadius: '10px 10px 0 0',
-    border: `1px solid ${colors.gray200}`,
+    borderRadius: 0,
+    borderTop: `1px solid ${colors.gray200}`,
+    borderRight: `2px solid ${colors.yellow400}`,
     borderBottom: 'none',
+    borderLeft: 'none',
     backgroundColor: colors.gray50,
     marginBottom: '-1px',
     maxWidth: '240px',
   },
-  tabActive: { backgroundColor: colors.white, borderTop: `2px solid ${colors.yellow400}` },
+  // The strip's outer left edge, so the run of tabs is bounded like its right.
+  tabFirst: { borderLeft: `2px solid ${colors.yellow400}` },
+  // No top rule: the active tab is told apart by the same light yellow fill the
+  // sidebar gives its current item (Sidebar.jsx:91), so "where am I" reads the
+  // same way in both places.
+  tabActive: { backgroundColor: colors.yellow100 },
   tabLabel: {
     border: 'none',
     background: 'transparent',
@@ -174,7 +188,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '6px',
-    marginLeft: '4px',
+    marginLeft: '8px',
     marginBottom: '4px',
     padding: '8px 14px',
     borderRadius: '8px',
