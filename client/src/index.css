@@ -75,6 +75,11 @@ html, body, #root {
 }
 
 /* Primary "New Task" button */
+/* Board members */
+.cb-member-remove:not(.cb-disabled):hover {
+  background-color: #fee2e2;
+}
+
 .cb-new-task:hover {
   background-color: #fde047;
 }
