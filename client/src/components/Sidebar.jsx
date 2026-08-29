@@ -4,6 +4,10 @@ import { LayoutGrid, Users, Settings, LogOut } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { colors } from '../theme';
 
+// The workspace the sidebar is headed by, the same on every page.
+const GROUP_NAME = 'Group 13';
+const GROUP_TAGLINE = 'Fullstack Project';
+
 // `to` is omitted for destinations that have no route yet; those render as
 // inert buttons rather than links that would bounce to the catch-all redirect.
 // `to` is built per board so the Members link opens the board that is open,
@@ -65,7 +69,10 @@ export const Sidebar = ({ board }) => {
       display: 'flex',
       flexDirection: 'column'
     }}>
-      {/* Group Header */}
+      {/* Group header — the workspace, not the open board.
+          It is fixed so Boards, Members and Settings all show the same name;
+          which board is open is already answered by the tab strip, and letting
+          the board decide it made the title change from page to page. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '32px' }}>
         <div style={{
           backgroundColor: colors.yellow400,
@@ -82,10 +89,8 @@ export const Sidebar = ({ board }) => {
           G13
         </div>
         <div>
-          <p style={{ fontWeight: 'bold', color: colors.black }}>{board?.name || 'Group 13'}</p>
-          <p style={{ fontSize: '14px', color: colors.gray500 }}>
-            {board?.description || 'Fullstack Project'}
-          </p>
+          <p style={{ fontWeight: 'bold', color: colors.black }}>{GROUP_NAME}</p>
+          <p style={{ fontSize: '14px', color: colors.gray500 }}>{GROUP_TAGLINE}</p>
         </div>
       </div>
 

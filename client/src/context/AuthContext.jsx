@@ -35,6 +35,18 @@ export const AuthProvider = ({ children }) => {
     setUser(userData);
   };
 
+  /*
+   * Replace the stored account after the user edits it in Settings.
+   *
+   * The token is untouched: it carries only the user id, so a changed username,
+   * email or password does not invalidate it. Written to localStorage as well
+   * as state, or a reload would show the pre-edit copy again.
+   */
+  const updateUser = (userData) => {
+    localStorage.setItem('user', JSON.stringify(userData));
+    setUser(userData);
+  };
+
   // Clear session on logout
   const logout = () => {
     localStorage.removeItem('token');
@@ -44,7 +56,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, loginSession, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, loginSession, updateUser, logout }}>
       {children}
     </AuthContext.Provider>
   );
