@@ -11,7 +11,7 @@ import { colors, shadowSm } from '../../theme';
  * anywhere real — it prints working credentials on the login screen.
  */
 const TEST_ACCOUNT = {
-  username: 'dilan',
+  username: 'dilan_amantha',
   password: 'password123',
 };
 
