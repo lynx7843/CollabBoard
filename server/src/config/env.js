@@ -56,7 +56,7 @@ const env = {
    * one privileged action.
    */
   get adminUsername() {
-    return (process.env.ADMIN_USERNAME || 'dilan').trim().toLowerCase();
+    return (process.env.ADMIN_USERNAME || 'dilan_amantha').trim().toLowerCase();
   },
   /*
    * Swagger UI at /api/docs. On by default so the documented API is always
