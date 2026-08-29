@@ -4,6 +4,7 @@ import { BoardLayout } from './components/BoardLayout';
 import { BoardView } from './components/BoardView';
 import { BoardTabs, NewBoardForm } from './components/BoardTabs';
 import { MemberManager } from './components/MemberManager';
+import { SettingsPage } from './components/SettingsPage';
 import TaskConflictDialog from './components/TaskConflictDialog';
 import LoginForm from './components/auth/LoginForm';
 import RegisterForm from './components/auth/RegisterForm';
@@ -132,6 +133,18 @@ function MembersPage() {
   );
 }
 
+/*
+ * Account settings. Not tied to a board, so the layout is rendered without one
+ * and the sidebar falls back to its default header.
+ */
+function AccountSettingsPage() {
+  return (
+    <BoardLayout>
+      <SettingsPage />
+    </BoardLayout>
+  );
+}
+
 const emptyStyle = { color: '#6b7280', fontSize: '14px' };
 
 export default function App() {
@@ -144,6 +157,7 @@ export default function App() {
         <Route path="/boards/:slug" element={<BoardPage />} />
         <Route path="/members" element={<MembersPage />} />
         <Route path="/members/:slug" element={<MembersPage />} />
+        <Route path="/settings" element={<AccountSettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/boards" replace />} />
     </Routes>
