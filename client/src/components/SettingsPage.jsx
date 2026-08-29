@@ -1,23 +1,44 @@
 import { useContext, useEffect, useState } from 'react';
 import { User, Mail, Lock, Check, AlertCircle } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
+import { api } from '../api';
+import { DEMO_MODE, DEMO_USER } from '../demo/demoMode';
 import { colors, shadowSm } from '../theme';
 
 /*
  * Account settings for the signed-in user.
  *
- * Frontend only for now: each card validates its own fields and reports the
- * outcome in its own banner, so a failed password change does not wipe the
- * "profile saved" message next to it. The two `saveProfile`/`savePassword`
- * calls below are the single places the API will be wired into later.
+ * Each card validates its own fields and reports the outcome in its own banner,
+ * so a failed password change does not wipe the "profile saved" message next to
+ * it. The checks below are the form's own; the server applies the same rules
+ * again and its `message` is what gets rendered when they disagree.
  */
 
-// Stand-ins for the requests, so the forms already show their pending and
-// resolved states. Replace the body with the real call; keep the shape.
-const saveProfile = async () => new Promise((resolve) => setTimeout(resolve, 400));
-const savePassword = async () => new Promise((resolve) => setTimeout(resolve, 400));
-
+// Mirrors the server's rules (server/src/utils/patterns.js), so the common
+// mistakes are caught without a round trip. The server remains the authority.
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const usernamePattern = /^[a-zA-Z0-9_.-]+$/;
+const USERNAME_MIN = 3;
+const USERNAME_MAX = 30;
+const PASSWORD_MIN = 8;
+
+/*
+ * The two writes this page makes.
+ *
+ * Under demo mode there is no server to talk to (demo/demoMode.js), so they
+ * resolve locally instead: the profile call echoes the edit back so the sidebar
+ * still updates, and the password call just succeeds.
+ */
+async function saveProfile(body) {
+  if (DEMO_MODE) return { ...DEMO_USER, name: body.username, username: body.username.toLowerCase(), email: body.email };
+  const { user } = await api('/users/me', { method: 'PATCH', body });
+  return user;
+}
+
+async function savePassword(body) {
+  if (DEMO_MODE) return;
+  await api('/users/me/password', { method: 'PATCH', body });
+}
 
 // One banner element for both cards, so success and failure sit in the same
 // spot and swapping between them does not move the fields under the cursor.
@@ -53,7 +74,7 @@ const Field = ({ id, label, icon: Icon, hint, ...inputProps }) => (
 );
 
 export const SettingsPage = () => {
-  const { user } = useContext(AuthContext);
+  const { user, updateUser } = useContext(AuthContext);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -73,6 +94,26 @@ export const SettingsPage = () => {
     setEmail(user?.email || '');
   }, [user]);
 
+  /*
+   * The stored account was written at login and may be older than the server's
+   * — edited in another tab, say. Re-read it once on open so the fields start
+   * from the truth. A failure here is left silent: the stored copy is still a
+   * reasonable starting point, and the save itself reports its own errors.
+   */
+  useEffect(() => {
+    if (DEMO_MODE) return;
+    let cancelled = false;
+    api('/users/me')
+      .then(({ user: fresh }) => {
+        if (!cancelled) updateUser(fresh);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const displayName = user?.name || user?.username || 'Your account';
   const initials = displayName
     .split(' ')
@@ -88,8 +129,25 @@ export const SettingsPage = () => {
     e.preventDefault();
     setProfileStatus(null);
 
-    if (name.trim().length < 2) {
-      setProfileStatus({ type: 'error', message: 'Username must be at least 2 characters.' });
+    if (name.trim().length < USERNAME_MIN) {
+      setProfileStatus({
+        type: 'error',
+        message: `Username must be at least ${USERNAME_MIN} characters.`,
+      });
+      return;
+    }
+    if (name.trim().length > USERNAME_MAX) {
+      setProfileStatus({
+        type: 'error',
+        message: `Username must be ${USERNAME_MAX} characters or fewer.`,
+      });
+      return;
+    }
+    if (!usernamePattern.test(name.trim())) {
+      setProfileStatus({
+        type: 'error',
+        message: 'Username may only contain letters, numbers, dots, dashes and underscores.',
+      });
       return;
     }
     if (!emailPattern.test(email.trim())) {
@@ -99,7 +157,10 @@ export const SettingsPage = () => {
 
     setSavingProfile(true);
     try {
-      await saveProfile({ name: name.trim(), email: email.trim() });
+      const updated = await saveProfile({ username: name.trim(), email: email.trim() });
+      // The stored copy drives the sidebar and the board headers, so it is
+      // replaced with what the server returned rather than with what was typed.
+      updateUser(updated);
       setProfileStatus({ type: 'success', message: 'Profile updated.' });
     } catch (err) {
       setProfileStatus({ type: 'error', message: err.message || 'Could not update profile.' });
@@ -116,8 +177,11 @@ export const SettingsPage = () => {
       setPasswordStatus({ type: 'error', message: 'Enter your current password.' });
       return;
     }
-    if (newPassword.length < 8) {
-      setPasswordStatus({ type: 'error', message: 'New password must be at least 8 characters.' });
+    if (newPassword.length < PASSWORD_MIN) {
+      setPasswordStatus({
+        type: 'error',
+        message: `New password must be at least ${PASSWORD_MIN} characters.`,
+      });
       return;
     }
     if (newPassword === currentPassword) {

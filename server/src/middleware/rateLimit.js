@@ -48,4 +48,19 @@ const lookupLimiter = rateLimit({
   message: { message: 'Too many lookups. Try again in a few minutes.' },
 });
 
-module.exports = { registerLimiter, loginLimiter, lookupLimiter };
+/*
+ * Changing a password requires the current one, which makes the endpoint a
+ * password-guessing oracle for anyone holding a stolen token. Capped per IP,
+ * and successes are not counted so a user correcting a typo is not locked out.
+ */
+const passwordChangeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  skip: () => env.isTest,
+  message: { message: 'Too many password attempts. Try again in a few minutes.' },
+});
+
+module.exports = { registerLimiter, loginLimiter, lookupLimiter, passwordChangeLimiter };

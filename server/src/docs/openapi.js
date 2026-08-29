@@ -135,6 +135,30 @@ const definition = {
           },
         },
       },
+      ProfileUpdateRequest: {
+        type: 'object',
+        description:
+          'Both fields are optional, but at least one must be sent. `name` is ' +
+          'accepted as an alias for `username`, as on register.',
+        properties: {
+          username: { type: 'string', minLength: USERNAME_MIN, maxLength: USERNAME_MAX, example: 'dilan' },
+          name: { type: 'string', maxLength: 60 },
+          email: { type: 'string', format: 'email', maxLength: 254, example: 'dilan@example.com' },
+        },
+      },
+      PasswordChangeRequest: {
+        type: 'object',
+        required: ['currentPassword', 'newPassword'],
+        properties: {
+          currentPassword: { type: 'string', format: 'password' },
+          newPassword: { type: 'string', format: 'password', minLength: PASSWORD_MIN },
+          confirmPassword: {
+            type: 'string',
+            format: 'password',
+            description: 'Optional; checked against `newPassword` when present.',
+          },
+        },
+      },
       LoginRequest: {
         type: 'object',
         required: ['password'],

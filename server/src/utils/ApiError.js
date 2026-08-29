@@ -18,8 +18,11 @@ class ApiError extends Error {
     return new ApiError(400, message, details);
   }
 
-  static unauthorized(message = 'Not authenticated.') {
-    return new ApiError(401, message);
+  // `details` is optional here and unused by the sign-in paths, which say as
+  // little as possible; it is for an already-authenticated caller getting a
+  // credential wrong on a specific field (changing a password, say).
+  static unauthorized(message = 'Not authenticated.', details) {
+    return new ApiError(401, message, details);
   }
 
   static forbidden(message = 'Not allowed.') {
