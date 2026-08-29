@@ -4,7 +4,7 @@ import { DEMO_MODE } from '../demo/demoMode';
 
 // Mirrors the board the demo stubs assume, so the tab strip has something to
 // render when there is no server to ask.
-const DEMO_BOARDS = [
+export const DEMO_BOARDS = [
   { _id: 'demo-board', slug: 'group-13', name: 'Group 13', description: 'Fullstack Project' },
 ];
 

@@ -221,8 +221,76 @@ async function removeMember(req, res) {
   res.json({ removed: String(userId) });
 }
 
+/*
+ * GET /api/boards/search?q=...
+ *
+ * Backs the top search bar, which does one thing: open a board. So this answers
+ * with the single board to open rather than a list of hits.
+ *
+ * A board whose name matches wins over a task, because someone typing a board's
+ * name means that board even if a task elsewhere happens to contain the words.
+ * Within either kind, the oldest board wins — the same order listBoards uses
+ * for the tab strip, so "the first one" means the same thing in both places.
+ *
+ * Only boards the caller is a member of are searched: the result names a board,
+ * and a hit on one they cannot open would tell them it exists.
+ *
+ * 200  { board, match: { type, title } }
+ * 400  { message }   empty query
+ * 401  { message }
+ * 404  { message }   nothing matched
+ */
+async function searchBoards(req, res) {
+  const query = String(req.query.q || '').trim();
+
+  if (!query) {
+    throw ApiError.badRequest('Type something to search for.');
+  }
+
+  const boards = await Board.find({ members: req.user._id }).sort({ createdAt: 1 });
+
+  if (boards.length === 0) {
+    throw ApiError.notFound('Nothing matches that search.');
+  }
+
+  // Substring, case-insensitive, so a partial name finds the board. The query
+  // is escaped: it is user input, and an unescaped '(' would throw here.
+  const pattern = new RegExp(escapeRegExp(query), 'i');
+
+  const named = boards.find((board) => pattern.test(board.name));
+  if (named) {
+    return res.json({ board: boardSummary(named), match: { type: 'board', title: named.name } });
+  }
+
+  /*
+   * Sorted by board rather than by task: the boards are already in the order
+   * the tie is to be broken by, so the first task found walking them in that
+   * order belongs to the board that should open. Doing it in one query and
+   * sorting tasks by their own createdAt would answer a different question.
+   */
+  const ids = boards.map((board) => board._id);
+  const tasks = await Task.find({ board: { $in: ids }, title: pattern })
+    .select('board title')
+    .lean();
+
+  for (const board of boards) {
+    const task = tasks.find((t) => String(t.board) === String(board._id));
+    if (task) {
+      return res.json({ board: boardSummary(board), match: { type: 'task', title: task.title } });
+    }
+  }
+
+  throw ApiError.notFound('No board or task matches that search.');
+}
+
+// Neutralises the regex metacharacters, so the query is matched as typed.
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 module.exports = {
   listBoards,
+  searchBoards,
   createBoard,
   deleteBoard,
   listMembers,

@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const {
   listBoards,
+  searchBoards,
   createBoard,
   deleteBoard,
   listMembers,
@@ -40,6 +41,50 @@ router.use(requireAuth);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
 router.get('/', listBoards);
+
+/**
+ * @openapi
+ * /boards/search:
+ *   get:
+ *     tags: [Boards]
+ *     summary: Find the board to open for a search term
+ *     description: >
+ *       Backs the top search bar, which only ever opens a board, so this answers
+ *       with the one board to open rather than a list of hits. Matches a board
+ *       name first, then a task title on any board the caller is a member of;
+ *       ties are broken by the oldest board, the same order the tab strip uses.
+ *     parameters:
+ *       - name: q
+ *         in: query
+ *         required: true
+ *         schema: { type: string }
+ *         example: roadmap
+ *     responses:
+ *       200:
+ *         description: The board to open, and what matched.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 board: { $ref: '#/components/schemas/Board' }
+ *                 match:
+ *                   type: object
+ *                   properties:
+ *                     type: { type: string, enum: [board, task] }
+ *                     title:
+ *                       type: string
+ *                       description: The board or task name that matched.
+ *       400: { $ref: '#/components/responses/BadRequest' }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       404:
+ *         description: Nothing matched.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ */
+// Before '/:boardId', or 'search' would be read as a board id.
+router.get('/search', searchBoards);
 
 /**
  * @openapi

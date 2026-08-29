@@ -1,12 +1,41 @@
 import { useContext, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Search, User } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
+import { api } from '../api';
+import { DEMO_MODE } from '../demo/demoMode';
+import { DEMO_BOARDS } from '../hooks/useBoards';
 import { colors, shadowSm } from '../theme';
+
+/*
+ * The demo stand-in for GET /boards/search. It can only match a board name:
+ * demo tasks live in BoardView's own state and were never persisted anywhere
+ * this could read them.
+ */
+async function demoSearch(query) {
+  const typed = query.toLowerCase();
+  const board = DEMO_BOARDS.find(
+    (b) => b.name.toLowerCase().includes(typed) || b.slug.includes(typed),
+  );
+
+  if (!board) {
+    const error = new Error('No board or task matches that search.');
+    error.status = 404;
+    throw error;
+  }
+
+  return { board };
+}
 
 export const Navbar = () => {
   const { user } = useContext(AuthContext);
+  const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  // What the last search said, when it did not open a board. Cleared as soon as
+  // the field is edited, so a stale "no match" is never read against new text.
+  const [searchError, setSearchError] = useState('');
   // Wraps both the trigger and the popup, so a click on the button itself is
   // "inside" and does not race the toggle below by closing and reopening.
   const menuRef = useRef(null);
@@ -29,19 +58,52 @@ export const Navbar = () => {
     };
   }, [menuOpen]);
 
+  /*
+   * The search bar does one thing: open a board. The server picks which one
+   * (GET /boards/search — a board name wins over a task title, oldest board
+   * breaks a tie), so the rule lives in one place rather than being re-derived
+   * from whatever the client happens to have loaded.
+   */
+  const handleSearch = async (e) => {
+    e.preventDefault();
+    const typed = query.trim();
+    if (!typed || searching) return;
+
+    setSearchError('');
+    setSearching(true);
+    try {
+      const { board } = DEMO_MODE
+        ? await demoSearch(typed)
+        : await api(`/boards/search?q=${encodeURIComponent(typed)}`);
+      setQuery('');
+      navigate(`/boards/${board.slug}`);
+    } catch (err) {
+      setSearchError(err.message);
+    } finally {
+      setSearching(false);
+    }
+  };
+
   return (
     <header style={styles.header}>
       <h1 style={styles.brand}>CollabBoard</h1>
 
-      <div style={styles.searchWrap}>
+      <form onSubmit={handleSearch} role="search" style={styles.searchWrap}>
         <Search size={20} style={styles.searchIcon} />
         <input
           className="cb-search"
           type="text"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setSearchError('');
+          }}
+          aria-label="Search boards and tasks"
           placeholder="Search boards, tasks..."
           style={styles.searchInput}
         />
-      </div>
+        {searchError && <p style={styles.searchError}>{searchError}</p>}
+      </form>
 
       <div ref={menuRef} style={styles.profileWrap}>
         <button
@@ -103,6 +165,22 @@ const styles = {
     color: colors.black,
   },
   searchWrap: { position: 'relative', flex: '1 1 auto', maxWidth: '576px', margin: '0 32px' },
+  // Floated under the field rather than laid out in the bar, so a miss does not
+  // shift the header's height.
+  searchError: {
+    position: 'absolute',
+    top: 'calc(100% + 6px)',
+    left: 0,
+    right: 0,
+    zIndex: 40,
+    margin: 0,
+    padding: '8px 12px',
+    borderRadius: '8px',
+    backgroundColor: colors.yellow50,
+    border: `1px solid ${colors.yellow200}`,
+    fontSize: '13px',
+    color: colors.yellow900,
+  },
   searchIcon: {
     position: 'absolute',
     left: '16px',
