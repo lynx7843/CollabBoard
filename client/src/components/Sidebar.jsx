@@ -24,7 +24,7 @@ const navItems = (slug) => [
     section: '/members',
     to: slug ? `/members/${slug}` : '/members',
   },
-  { id: 'settings', label: 'Settings', icon: Settings, disabled: true, badge: 'Coming soon' },
+  { id: 'settings', label: 'Settings', icon: Settings, section: '/settings', to: '/settings' },
 ];
 
 // The section root itself, or a board inside it. Tested on the boundary rather
