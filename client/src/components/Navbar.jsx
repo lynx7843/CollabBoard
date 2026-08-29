@@ -1,4 +1,5 @@
 import { useContext, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Search, User } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { colors, shadowSm } from '../theme';
@@ -65,16 +66,17 @@ export const Navbar = () => {
             <p style={styles.menuName}>{user?.name || user?.username || 'Signed in'}</p>
             <p style={styles.menuEmail}>{user?.email || 'No email on file'}</p>
 
-            <button
-              type="button"
+            {/* Closes the popup on the way out, so coming back from Settings
+                does not find it still hanging open over the page. */}
+            <Link
               role="menuitem"
-              disabled
-              title="Coming soon"
+              to="/settings"
+              onClick={() => setMenuOpen(false)}
+              className="cb-manage-account"
               style={styles.manageButton}
             >
               Manage account
-              <span style={styles.comingSoon}>Coming soon</span>
-            </button>
+            </Link>
           </div>
         )}
       </div>
@@ -188,17 +190,10 @@ const styles = {
     backgroundColor: colors.white,
     fontSize: '14px',
     fontWeight: '600',
-    color: colors.gray500,
-    cursor: 'not-allowed',
+    color: colors.black,
+    textDecoration: 'none',
+    cursor: 'pointer',
     boxShadow: shadowSm,
-  },
-  comingSoon: {
-    padding: '2px 8px',
-    borderRadius: '999px',
-    backgroundColor: colors.yellow100,
-    border: `1px solid ${colors.yellow200}`,
-    fontSize: '11px',
-    fontWeight: '600',
-    color: colors.yellow900,
+    transition: 'background-color 150ms, border-color 150ms',
   },
 };

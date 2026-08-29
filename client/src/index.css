@@ -110,6 +110,12 @@ html, body, #root {
   text-decoration-color: #000000;
 }
 
+/* Account menu */
+.cb-manage-account:hover {
+  border-color: #facc15;
+  background-color: #fefce8;
+}
+
 /* Board tabs */
 .cb-tab:hover {
   background-color: #fefce8;
