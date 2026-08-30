@@ -121,6 +121,53 @@ The shared pieces — server list, the JWT scheme, and the `User` / `Board` /
 `server/tests/docs.openapi.test.js` fails if a route is added without an
 `@openapi` block, or if the spec describes a route that no longer exists.
 
+## Environment Variables
+
+Two separate sets: the API server reads a `.env` file (or the host's environment
+UI), and the client's are compiled into the bundle by Vite. Copy the examples:
+
+```bash
+cp server/.env.example server/.env
+cp client/.env.example client/.env
+```
+
+### API server (`server/.env`)
+
+| Variable | Required | Default | Notes |
+| --- | --- | --- | --- |
+| `MONGODB_URI` | **yes** | — | Atlas connection string. The server refuses to boot without it. |
+| `JWT_SECRET` | **yes** | — | Long random hex: `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
+| `MONGODB_DB` | no | `collabboard` | Database name. |
+| `CLIENT_ORIGIN` | in production | `http://localhost:5173` | CORS allowlist, comma-separated. Must list the deployed client URL. |
+| `ADMIN_USERNAME` | in production | `dilan_amantha` | The one account that may create and delete boards. |
+| `NODE_ENV` | in production | `development` | Set to `production` on the API host; also suppresses stack traces in error responses. |
+| `PORT` | no | `5000` | Injected by the host — do not set it there, and do not hardcode it. |
+| `JWT_EXPIRES_IN` | no | `7d` | |
+| `BCRYPT_ROUNDS` | no | `12` | |
+| `ENABLE_API_DOCS` | no | `true` | `false` keeps Swagger UI off a public deployment. |
+
+Only the first two are enforced at boot. Because the rest fall back silently, the
+server prints its effective configuration on startup and warns in production
+about anything left at a development default — check that line in the deploy log
+after the first deploy:
+
+```
+CollabBoard API listening on http://localhost:5000 (production)
+  config: env=production  db=collabboard  admin=dilan_amantha  origins=https://collabboard.vercel.app  docs=on
+```
+
+### Client (`client/.env`)
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `VITE_DEMO_MODE` | unset (off) | `true` enables the offline stub layer. Leave it off for anything deployed. |
+| `VITE_API_URL` | `http://localhost:5000` | Origin of the API. Used by the Socket.IO connection; REST calls use relative `/api` paths. |
+
+Vite only exposes `VITE_`-prefixed variables and **bakes them into the bundle at
+build time**, so changing one needs a rebuild locally or a redeploy on the host —
+restarting is not enough. Nothing secret belongs in these: they ship to the
+browser in plain text.
+
 ## Demo Mode
 
 Because there is no API yet, the client ships with demo mode enabled. It short-circuits only the calls that would fail — nothing else is faked.

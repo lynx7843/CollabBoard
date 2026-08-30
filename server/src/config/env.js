@@ -76,6 +76,41 @@ const env = {
       .filter(Boolean);
   },
   assertRequired,
+  describe,
 };
+
+/*
+ * A one-line, secret-free summary of what the process actually booted with.
+ * Only MONGODB_URI and JWT_SECRET are required, so everything else silently
+ * falls back to a development default — printing the effective values makes a
+ * key that was never set on the host obvious in the deploy log instead of
+ * showing up later as an unexplained CORS failure or a missing admin.
+ */
+function describe() {
+  const warnings = [];
+
+  if (env.isProduction) {
+    if (!process.env.CLIENT_ORIGIN) {
+      warnings.push(
+        'CLIENT_ORIGIN is not set, so only http://localhost:5173 may call this API. ' +
+          'Set it to the deployed client URL (comma-separated for more than one).',
+      );
+    }
+    if (!process.env.ADMIN_USERNAME) {
+      warnings.push(`ADMIN_USERNAME is not set, falling back to "${env.adminUsername}".`);
+    }
+  }
+
+  return {
+    summary: [
+      `env=${env.nodeEnv}`,
+      `db=${env.mongoDb}`,
+      `admin=${env.adminUsername}`,
+      `origins=${env.clientOrigins.join(' ')}`,
+      `docs=${env.docsEnabled ? 'on' : 'off'}`,
+    ].join('  '),
+    warnings,
+  };
+}
 
 module.exports = env;
