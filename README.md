@@ -168,6 +168,70 @@ build time**, so changing one needs a rebuild locally or a redeploy on the host 
 restarting is not enough. Nothing secret belongs in these: they ship to the
 browser in plain text.
 
+### How the client reaches the API
+
+Every REST call in the client uses a **relative** `/api/...` path — there is no
+API base URL baked into the code. Two different things make that resolve:
+
+* **Locally:** the Vite dev server proxies `/api` to `http://localhost:5000`
+  (`client/vite.config.js`).
+* **Deployed:** `client/vercel.json` rewrites `/api/:path*` to the API host, so
+  the browser only ever talks to the Vercel origin. Requests are same-origin,
+  which means no CORS preflight and no `Authorization` header stripped in
+  between. Point that rewrite at your own API host if you redeploy the backend.
+
+The Socket.IO connection is the exception: a rewrite does not carry a WebSocket
+upgrade, so `client/src/socket.js` connects straight to `VITE_API_URL` and that
+origin **must** be listed in the API's `CLIENT_ORIGIN`.
+
+`client/vercel.json` carries a second rule after that one, rewriting everything
+else to `/index.html`. React Router owns `/boards/:slug`, `/members/:slug` and
+`/settings`, but a static host knows nothing about them and answers 404 when one
+is opened directly — on a refresh, on a shared link, or when search jumps
+straight to a board. The catch-all hands those paths the app instead. Order
+matters: the `/api` rule has to come first, or API calls would be answered with
+`index.html` too. Real files (`/assets/*`, the favicons) are still served as
+themselves, because Vercel only applies a rewrite when nothing on disk matches.
+
+## Deployment
+
+The app is deployed as two separate services, because Socket.IO needs a process
+that stays alive and holds open connections — which Vercel's serverless
+functions do not:
+
+| Part | Host | Notes |
+| --- | --- | --- |
+| `client/` | Vercel | Static Vite build. |
+| `server/` | Render | https://syncspace-api-rxhi.onrender.com — Express + Socket.IO against Mongo Atlas. |
+
+On Render's free tier the API sleeps after ~15 minutes idle, so the first request
+after a quiet spell takes ~30s to wake it. Open the app once before demoing it.
+
+### Vercel project settings
+
+This is a monorepo with no `package.json` at the repository root, so **Root
+Directory must be set to `client`** or the build fails immediately with no
+project to install. That one is set in the Vercel dashboard (Settings → General)
+and cannot live in a config file:
+
+| Setting | Value | Where it is set |
+| --- | --- | --- |
+| Root Directory | `client` | Dashboard only — **required** |
+| Node.js Version | 22.x | Dashboard only |
+| Framework Preset | Vite | `client/vercel.json` |
+| Install Command | `npm install` | `client/vercel.json` |
+| Build Command | `npm run build` | `client/vercel.json` |
+| Output Directory | `dist` | `client/vercel.json` |
+
+The bottom four are pinned in `client/vercel.json`, which takes precedence over
+the dashboard, so a build is reproducible from the repository rather than from
+settings nobody can see in a diff. That file also carries the two rewrites
+described under [How the client reaches the API](#how-the-client-reaches-the-api).
+
+Set the client's build-time variables in Settings → Environment Variables
+(`VITE_DEMO_MODE=false`, `VITE_API_URL=https://syncspace-api-rxhi.onrender.com`),
+and remember that Vite bakes them in — changing one needs a redeploy.
+
 ## Demo Mode
 
 Because there is no API yet, the client ships with demo mode enabled. It short-circuits only the calls that would fail — nothing else is faked.
