@@ -41,7 +41,7 @@ A real-time, collaborative Kanban-style task board designed for seamless team pr
 | **Frontend** | React 19, Vite 8, React Router 7, lucide-react |
 | **Real-Time** | socket.io-client *(client wired, server pending)* |
 | **Backend** | Node.js, Express, Mongoose, Socket.io *(dependencies declared, not implemented)* |
-| **Tooling** | ESLint |
+| **Tooling** | ESLint, Vitest + Testing Library (client), Jest + Supertest (server), Docker Compose, GitHub Actions |
 
 ## Project Structure
 
@@ -317,6 +317,49 @@ and every push to `main`:
 * **Client** — `npm ci && npm test && npm run build`. The build is a check in
   its own right: it is what Vercel runs, and it fails on an import that resolves
   in dev but not in a bundle.
+
+## Running it with Docker
+
+The whole stack — database, API, client — on one machine, with nothing installed
+but Docker:
+
+```bash
+docker compose up --build      # then open http://localhost:8080
+```
+
+| Service | Image | Where |
+| --- | --- | --- |
+| `client` | nginx serving the Vite build | http://localhost:8080 |
+| `server` | Node 22, Express + Socket.IO | http://localhost:5000 (Swagger UI at `/api/docs`) |
+| `mongo` | `mongo:8`, data in a named volume | inside the compose network only |
+
+`docker compose down` stops it and keeps the data; `down -v` discards the
+database with it.
+
+**The deployed instance does not use this file.** It runs the client on Vercel
+and the API on Render against MongoDB Atlas, so the `mongo` service here has no
+counterpart in production — this is for local runs and for demonstrating the
+stack without a deployment.
+
+A few things in it are deliberate:
+
+* **The API port is published**, even though nginx proxies `/api` internally.
+  The browser connects the WebSocket straight to the API, exactly as it does in
+  the deployment where a Vercel rewrite cannot carry an upgrade — so the compose
+  stack exercises the same `CLIENT_ORIGIN` allowlist production does.
+* **`client/nginx.conf` mirrors `client/vercel.json`**: an SPA fallback so
+  `/boards/:slug` survives a refresh, and a same-origin `/api`. The client code
+  is identical in both, with no API base URL baked into the bundle.
+* **`VITE_API_URL` and `VITE_DEMO_MODE` are build args, not environment.** Vite
+  bakes them into the bundle, so changing one needs `--build`, and
+  `client/.dockerignore` excludes `.env` so a local file cannot silently
+  override them.
+* **`NODE_ENV=development` on the API.** Under `production` Mongoose skips
+  `autoIndex`, and this database starts empty — the unique indexes on username
+  and email would never be built (`server/src/config/db.js`).
+* **No secrets.** The compose `JWT_SECRET` is a local-only string and Mongo runs
+  without credentials on a private network. The deployment sets its own values
+  in its host's environment UI.
 
 ## Environment Variables
 

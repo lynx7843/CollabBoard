@@ -1,0 +1,9 @@
+node_modules
+npm-debug.log
+# Never bake local secrets into an image: the deployment sets its own.
+.env
+.env.*
+!.env.example
+tests
+coverage
+.git
