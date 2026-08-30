@@ -393,11 +393,26 @@ export const BoardView = ({ boardId, board, submitAction }) => {
     try {
       const saved = await api(`/boards/${boardId}/tasks/${task._id}`, {
         method: 'PATCH',
-        body: { title, description, priority },
+        /*
+         * The version this edit was written against. If someone else saved
+         * first the server answers 409 and writes nothing, rather than letting
+         * this edit erase theirs — the task's `version` is what makes the two
+         * writes distinguishable.
+         */
+        body: { title, description, priority, expectedVersion: task.version },
       });
       dispatch({ type: 'TASK_UPDATED', payload: saved.task });
       setError('');
     } catch (err) {
+      // A rejected edit: put the server's version on the board so what is shown
+      // is what was actually saved, and say so rather than leaving the edit
+      // looking like it stuck.
+      if (err.status === 409 && err.data?.latest) {
+        dispatch({ type: 'TASK_UPDATED', payload: err.data.latest });
+        setError(`${err.message} Your change was not saved.`);
+        return;
+      }
+
       setError(err.message);
       loadTasks();
     }

@@ -322,6 +322,13 @@ router.post('/:boardId/tasks', createTask);
  *       Every field is optional; only those present are changed. Changing
  *       `status` is how a card moves column, and re-positions it at the end of
  *       the column it lands in.
+ *
+ *
+ *       Send `expectedVersion` to have a lost update rejected instead of
+ *       applied: if the task has moved on since it was read, the answer is 409
+ *       carrying the server's copy, and nothing is written. Omit it for a
+ *       last-writer-wins update. A write that changes something increments the
+ *       task's `version`.
  *     parameters:
  *       - $ref: '#/components/parameters/boardId'
  *       - $ref: '#/components/parameters/taskId'
@@ -341,6 +348,11 @@ router.post('/:boardId/tasks', createTask);
  *                 maxLength: 40
  *                 description: "'high', 'medium' or 'low'."
  *                 example: high
+ *               expectedVersion:
+ *                 type: integer
+ *                 minimum: 0
+ *                 description: The task's `version` as the caller last read it.
+ *                 example: 3
  *     responses:
  *       200:
  *         description: The updated task.
@@ -353,6 +365,18 @@ router.post('/:boardId/tasks', createTask);
  *       400: { $ref: '#/components/responses/BadRequest' }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
+ *       409:
+ *         description: >
+ *           The task changed since `expectedVersion` was read. Nothing was
+ *           written; `latest` is the server's copy, for the client to show
+ *           beside the rejected edit.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string }
+ *                 latest: { $ref: '#/components/schemas/Task' }
  */
 router.patch('/:boardId/tasks/:taskId', updateTask);
 

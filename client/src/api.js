@@ -22,6 +22,10 @@ export async function api(path, { method = 'GET', body } = {}) {
   if (!response.ok) {
     const error = new Error(data.message || 'Something went wrong. Please try again.');
     error.status = response.status;
+    // The whole body, not just the message: a 409 from a task edit carries the
+    // server's copy of the task as `latest`, which the caller needs to show or
+    // apply. Everything else can ignore it.
+    error.data = data;
     throw error;
   }
 
