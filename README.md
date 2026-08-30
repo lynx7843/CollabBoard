@@ -22,10 +22,10 @@ A real-time, collaborative Kanban-style task board designed for seamless team pr
 
 * **Real-Time Collaboration:** Task creates, edits, moves and deletes are broadcast over Socket.IO to everyone viewing the same board. See [Real-Time Updates](#real-time-updates).
 
-### Implemented but awaiting a backend
+### Working now (resilience)
 
-* **Offline Support:** Client-side caching and an offline action queue are implemented in `useBoardPersistence`.
-* **Conflict Resolution:** `TaskConflictDialog` renders a side-by-side choice on a 409, but reaching it needs `submitAction`'s board-actions endpoint. Detection itself is live — see [Concurrent Edits](#concurrent-edits).
+* **Offline Support:** Task changes are cached and queued on the device and replayed on reconnect — see [Offline Support](#offline-support).
+* **Conflict Resolution:** A clashing edit is refused rather than applied over someone else's, and `TaskConflictDialog` offers the choice — see [Concurrent Edits](#concurrent-edits).
 
 ### Not yet started
 
@@ -218,6 +218,54 @@ still needs its board-actions endpoint before the dialog can be reached.
 
 Covered by `server/tests/tasks.conflict.test.js`.
 
+## Offline Support
+
+Work in progress survives a refresh and a brief network loss. Three pieces, all
+on the client:
+
+**One write path.** `BoardView` never calls the API for a change. It describes
+what happened — `CREATE_TASK`, `UPDATE_TASK`, `MOVE_TASK`, `DELETE_TASK` — and
+hands it to `useBoardPersistence.submitAction`, which is what puts the queue in
+the path of every edit rather than beside it. The card is drawn immediately
+either way, so the board looks the same whether the change reached the server or
+is waiting on the device.
+
+**No `/actions` endpoint.** An action is translated into the ordinary REST call
+it corresponds to (`utils/taskRequests.js`), so a change replayed from the queue
+goes through the same API a live one does and there is only one server contract
+to keep working.
+
+**A cache and a queue.** Every version of the board is written to `localStorage`
+(`utils/storage.js`). If the tasks request fails, the board renders the last copy
+this device saw and says so, rather than showing nothing. Changes made while
+unreachable are queued, and the tab strip is cached too — without it a reload
+while offline would have no board to open and the cached tasks nowhere to go.
+
+### Replaying the queue
+
+Order is the hard part, and it is why the replay is its own module
+(`utils/replayQueue.js`). A task created offline has a local id, so every edit
+queued behind it refers to a task the server has never heard of. The create is
+replayed first, the id it returns is mapped, and the rest of the queue is
+rewritten to use it. Replaying out of order would 404 on every follow-up.
+
+Each outcome is handled differently, which matters more than it sounds:
+
+| Outcome | What happens |
+| --- | --- |
+| Applied | Dropped from the queue; a create's new id is remembered for the changes behind it. |
+| Server unreachable again | Kept, and the drain stops — the rest is still in order behind it. |
+| **409 conflict** | Kept, the drain stops, and `TaskConflictDialog` opens with both versions. One dialog, not one per queued change. |
+| Refused (`400`/`404`) | Dropped, with a console warning. The task was deleted while this device was away; replaying it again would fail identically, so keeping it would mean a queue that never empties. |
+
+Resolving a conflict as *keep mine* re-sends the edit rebased onto the version
+the server actually holds, so it is applied rather than refused a second time;
+*keep theirs* abandons it. Either way the board reloads, because the server's
+copy has moved on behind it.
+
+The status bar reports all of this — offline, how many changes are waiting,
+syncing, and what the last sync did.
+
 ## Environment Variables
 
 Two separate sets: the API server reads a `.env` file (or the host's environment
@@ -401,7 +449,6 @@ The Vite dev server already proxies `/api` to `http://localhost:5000`, so the cl
 
 ## Known Limitations
 
-* **No persistence:** With no backend, all board and member changes are lost on refresh.
 * **Rate limits are per-instance and in-memory:** Registration, login, the invite lookup and the password change are capped per IP over a 15-minute window (`server/src/middleware/rateLimit.js`), but the counts live in the API process's memory. They reset on every deploy or restart — including when a sleeping free-tier host wakes — and two instances behind a load balancer would each allow the full quota. Correct for the single always-on instance this runs on; a shared store (Redis) is the fix if it is ever scaled out.
 * **No drag-and-drop:** Tasks are moved with the **Change** button on each card.
 * **Desktop-first:** The layout is optimised for desktop browsers.

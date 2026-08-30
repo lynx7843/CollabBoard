@@ -31,8 +31,8 @@ function BoardPage() {
   const activeSlug = slug || boards[0]?.slug;
   const board = boards.find((b) => b.slug === activeSlug);
 
-  const { conflict, resolveConflict, submitAction, isOnline, isSyncing, message } =
-    useBoardPersistence(activeSlug || 'none', null);
+  const { conflict, resolveConflict, submitAction, isOnline, isSyncing, message, pendingCount, revision } =
+    useBoardPersistence(activeSlug || 'none');
 
   const handleCreate = async ({ name, description }) => {
     setBusy(true);
@@ -58,7 +58,12 @@ function BoardPage() {
 
   return (
     <BoardLayout board={board}>
-      <NetworkStatusBar isOnline={isOnline} isSyncing={isSyncing} message={message} />
+      <NetworkStatusBar
+        isOnline={isOnline}
+        isSyncing={isSyncing}
+        message={message}
+        pendingCount={pendingCount}
+      />
       <TaskConflictDialog conflict={conflict} onResolve={resolveConflict} />
 
       <BoardTabs
@@ -90,7 +95,14 @@ function BoardPage() {
         </p>
       )}
 
-      {board && <BoardView boardId={board.slug} board={board} submitAction={submitAction} />}
+      {board && (
+        <BoardView
+          boardId={board.slug}
+          board={board}
+          submitAction={submitAction}
+          revision={revision}
+        />
+      )}
     </BoardLayout>
   );
 }
