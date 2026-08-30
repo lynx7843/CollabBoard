@@ -31,8 +31,19 @@ export function boardReducer(state, action) {
     // previous board's cards never show under the new board's name.
     case 'BOARD_CHANGED':
       return { ...initialState, loading: true };
+    /*
+     * The board this runs on is also listening for task:created, and the server
+     * broadcasts to the whole room including whoever wrote the task — so the
+     * client that just added a card sees it arrive a second time. Adding a task
+     * it already holds is ignored rather than rendered twice.
+     */
     case 'TASK_CREATED': {
       const status = action.payload.status || 'todo';
+      const alreadyHeld = Object.values(state.columns).some((column) =>
+        column.some((task) => isSameTask(task, action.payload))
+      );
+      if (alreadyHeld) return state;
+
       return {
         ...state,
         columns: {
@@ -42,15 +53,43 @@ export function boardReducer(state, action) {
       };
     }
 
+    /*
+     * An edit replaces a task where it sits. A move made by someone else,
+     * though, arrives here as the same task:updated event carrying a different
+     * status — there is no separate "moved" event on the wire — so a status
+     * that disagrees with the column the task is currently in relocates it.
+     * A local edit keeps the task's own status, so it still replaces in place.
+     */
     case 'TASK_UPDATED': {
       const updated = action.payload;
-      const newColumns = { ...state.columns };
-      Object.keys(newColumns).forEach((colKey) => {
-        newColumns[colKey] = newColumns[colKey].map((task) =>
-          isSameTask(task, updated) ? updated : task
-        );
-      });
-      return { ...state, columns: newColumns };
+      const from = Object.keys(state.columns).find((colKey) =>
+        state.columns[colKey].some((task) => isSameTask(task, updated))
+      );
+
+      // Not a task this board is showing (a stale event, or one for a board
+      // that has since been switched away from).
+      if (!from) return state;
+
+      const to = updated.status || from;
+
+      if (to === from || !state.columns[to]) {
+        return {
+          ...state,
+          columns: {
+            ...state.columns,
+            [from]: state.columns[from].map((task) => (isSameTask(task, updated) ? updated : task)),
+          },
+        };
+      }
+
+      return {
+        ...state,
+        columns: {
+          ...state.columns,
+          [from]: state.columns[from].filter((task) => !isSameTask(task, updated)),
+          [to]: [...state.columns[to], updated],
+        },
+      };
     }
 
     // Moves a task between columns. TASK_UPDATED replaces a task in place and

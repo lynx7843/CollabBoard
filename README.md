@@ -18,9 +18,12 @@ A real-time, collaborative Kanban-style task board designed for seamless team pr
 * **Authentication Flow:** Login and create-account screens with protected routes and a logout action.
 * **Responsive Layout:** Columns grow to fill the board area and scroll horizontally on narrow screens.
 
+### Working now (real-time)
+
+* **Real-Time Collaboration:** Task creates, edits, moves and deletes are broadcast over Socket.IO to everyone viewing the same board. See [Real-Time Updates](#real-time-updates).
+
 ### Implemented but awaiting a backend
 
-* **Real-Time Collaboration:** A Socket.io client and board event handlers are wired up, but there is no server to connect to.
 * **Offline Support:** Client-side caching and an offline action queue are implemented in `useBoardPersistence`.
 * **Conflict Resolution:** The client detects HTTP 409 responses and shows a resolution dialog rather than silently overwriting.
 
@@ -120,6 +123,45 @@ The shared pieces — server list, the JWT scheme, and the `User` / `Board` /
 
 `server/tests/docs.openapi.test.js` fails if a route is added without an
 `@openapi` block, or if the spec describes a route that no longer exists.
+
+## Real-Time Updates
+
+Two people on the same board see each other's changes without refreshing. The
+server holds one Socket.IO room per board, keyed by the board's slug — the same
+id the REST routes address a board by — so a change only reaches the people
+looking at that board.
+
+| Direction | Event | Payload |
+| --- | --- | --- |
+| client → server | `join-board` | board slug |
+| client → server | `leave-board` | board slug |
+| server → client | `task:created` | the new task |
+| server → client | `task:updated` | the whole task, after the change |
+| server → client | `task:deleted` | the task's id |
+
+The events are emitted by `taskController` after the write commits, carrying the
+same payload the writer received in its HTTP response — so no client ends up
+holding a different version of a task than the one it would get by refetching.
+A move is a status change, so it travels as `task:updated`; `boardReducer`
+relocates the card when the status disagrees with the column it is sitting in.
+The writer is in the room too and receives its own event back, which is what
+keeps a second tab of the same session in sync; the reducer ignores a task it
+already holds rather than drawing it twice.
+
+**The connection is authenticated.** A WebSocket handshake has no `Authorization`
+header, so `client/src/socket.js` sends the session's JWT in the handshake
+payload and `server/src/socket.js` verifies it — then checks board membership
+before honouring a `join-board`. Knowing a board's slug is not enough to listen
+to it, which matches the REST side answering a non-member with 404.
+
+Files: `server/src/socket.js`, `server/index.js` (the HTTP server the upgrade
+needs), `client/src/socket.js`, `client/src/hooks/useBoardSockets.js`. Covered by
+`server/tests/tasks.realtime.test.js`.
+
+Two settings have to line up or the socket silently never connects:
+`VITE_API_URL` on Vercel must point at the API host (a rewrite cannot carry a
+WebSocket upgrade), and `CLIENT_ORIGIN` on the API host must list the Vercel
+domain.
 
 ## Environment Variables
 
@@ -283,6 +325,5 @@ The Vite dev server already proxies `/api` to `http://localhost:5000`, so the cl
 ## Known Limitations
 
 * **No persistence:** With no backend, all board and member changes are lost on refresh.
-* **No real-time sync:** Multiple browser tabs do not see each other's changes.
 * **No drag-and-drop:** Tasks are moved with the **Change** button on each card.
 * **Desktop-first:** The layout is optimised for desktop browsers.
