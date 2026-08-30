@@ -141,14 +141,16 @@ What demo mode changes:
 * The member list is pre-populated; invites and removals update local state only.
 * The Socket.io connection and the board's initial `GET` are skipped, so the console stays clean.
 
-Demo mode is controlled by a single flag in `client/src/demo/demoMode.js`. Turn it off once the API exists:
+Demo mode is controlled by a single flag in `client/src/demo/demoMode.js` and is **off by default** — the app talks to the real API unless you opt in:
 
 ```bash
 # client/.env
-VITE_DEMO_MODE=false
+VITE_DEMO_MODE=true
 ```
 
-> ⚠️ While demo mode is on, login accepts the hard-coded credentials with no server. Disable it before deploying anything real.
+Vite bakes the value into the bundle at build time, so changing it requires a rebuild (or a redeploy), not just a restart.
+
+> ⚠️ While demo mode is on, login accepts the hard-coded credentials with no server. Never enable it on a deployed build.
 
 The Vite dev server already proxies `/api` to `http://localhost:5000`, so the client is ready to talk to a backend as soon as one is running.
 
