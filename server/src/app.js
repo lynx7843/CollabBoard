@@ -19,9 +19,11 @@ function createApp() {
   app.set('trust proxy', 1);
   app.disable('x-powered-by');
 
+  // A function rather than the raw list: entries may carry a wildcard for a
+  // Vercel preview subdomain (config/env.js -> utils/origins.js).
   app.use(
     cors({
-      origin: env.clientOrigins,
+      origin: (origin, callback) => callback(null, env.isAllowedOrigin(origin)),
       credentials: true,
     }),
   );

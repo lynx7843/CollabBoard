@@ -5,7 +5,13 @@
  * asserted here at boot so a missing secret fails loudly on startup instead of
  * quietly at the first request that needs it.
  */
+const { buildOriginMatcher } = require('../utils/origins');
+
 const REQUIRED = ['MONGODB_URI', 'JWT_SECRET'];
+
+// Rebuilt only when CLIENT_ORIGIN itself changes, so the patterns are compiled
+// once rather than on every request that carries an Origin header.
+let originCache = { source: null, matcher: null };
 
 function assertRequired() {
   const missing = REQUIRED.filter((key) => !process.env[key] || !process.env[key].trim());
@@ -68,12 +74,30 @@ const env = {
   get bcryptRounds() {
     return toInt(process.env.BCRYPT_ROUNDS, 12);
   },
-  // Comma-separated so a deployed client origin can be added without a code change.
+  /*
+   * Comma-separated so a deployed client origin can be added without a code
+   * change. An entry may contain a `*` for one hostname label, which is how a
+   * Vercel preview build — its subdomain is generated per deployment and cannot
+   * be known in advance — gets in without widening the list to everything:
+   *
+   *   CLIENT_ORIGIN=https://collab-board-six-kappa.vercel.app,https://collab-board-*.vercel.app
+   */
   get clientOrigins() {
     return (process.env.CLIENT_ORIGIN || 'http://localhost:5173')
       .split(',')
       .map((origin) => origin.trim())
       .filter(Boolean);
+  },
+  /*
+   * The single answer to "may this browser talk to us", shared by the cors
+   * middleware and Socket.IO so the REST and real-time sides cannot disagree.
+   */
+  get isAllowedOrigin() {
+    const source = process.env.CLIENT_ORIGIN || '';
+    if (originCache.source !== source) {
+      originCache = { source, matcher: buildOriginMatcher(this.clientOrigins) };
+    }
+    return originCache.matcher;
   },
   assertRequired,
   describe,
