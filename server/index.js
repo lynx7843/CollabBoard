@@ -12,7 +12,10 @@ async function start() {
 
   const app = createApp();
   const server = app.listen(env.port, () => {
+    const { summary, warnings } = env.describe();
     console.log(`CollabBoard API listening on http://localhost:${env.port} (${env.nodeEnv})`);
+    console.log(`  config: ${summary}`);
+    warnings.forEach((warning) => console.warn(`  warning: ${warning}`));
   });
 
   const shutdown = (signal) => {
