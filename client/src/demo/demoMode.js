@@ -5,13 +5,15 @@
  * :5000 fail. Demo mode short-circuits exactly those calls so the UI can be
  * presented standalone. It fakes nothing else.
  *
- * Turn it off with either:
- *   - VITE_DEMO_MODE=false in client/.env, or
- *   - flip the default below to `=== 'true'`
+ * OFF unless explicitly switched on, so a forgotten env var in a deployed
+ * build fails safe (real API, real socket) instead of shipping a fake app.
+ *
+ * Turn it on for a standalone UI demo with VITE_DEMO_MODE=true in client/.env.
+ * Vite bakes this in at build time, so changing it needs a rebuild/redeploy.
  *
  * WARNING: while this is on, login accepts ANY credentials without a server.
  */
-export const DEMO_MODE = import.meta.env.VITE_DEMO_MODE !== 'false';
+export const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
 
 export const DEMO_TOKEN = 'demo-token';
 
