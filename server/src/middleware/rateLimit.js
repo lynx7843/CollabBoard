@@ -2,6 +2,28 @@ const rateLimit = require('express-rate-limit');
 const env = require('../config/env');
 
 /*
+ * Every limiter below counts in this process's memory — express-rate-limit's
+ * default MemoryStore, deliberately kept rather than backed by Redis.
+ *
+ * Two consequences, and both are acceptable for a single always-on instance:
+ *
+ *   - The counts reset when the process does, so a deploy or a restart hands
+ *     everyone a fresh allowance. On a host that sleeps when idle, waking up
+ *     does the same.
+ *   - They are per-instance. Run two copies of this server behind a load
+ *     balancer and the effective limit doubles, because neither knows what the
+ *     other has already counted.
+ *
+ * Both are listed in the README's known limitations. A shared store (Redis, via
+ * rate-limit-redis) is the fix if this is ever scaled past one instance; it is
+ * a dependency and a service to run, which is not worth it here.
+ *
+ * Every limiter is keyed on the client IP, which only reads correctly because
+ * app.js sets `trust proxy` — behind Render's proxy the socket address is the
+ * proxy's, not the caller's.
+ */
+
+/*
  * Account creation is unauthenticated and writes to the database, so it is the
  * obvious target for scripted abuse. Cap it per IP.
  *

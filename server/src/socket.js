@@ -24,7 +24,12 @@ const roomFor = (slug) => `board:${String(slug || '').trim().toLowerCase()}`;
 
 function initSocket(httpServer) {
   io = new Server(httpServer, {
-    cors: { origin: env.clientOrigins, credentials: true },
+    // The same allowlist the REST side uses, wildcards included. This is the
+    // one place the deployed client is genuinely cross-origin: REST goes
+    // through the Vercel rewrite and arrives same-origin, but a WebSocket
+    // cannot, so a preview URL missing from CLIENT_ORIGIN breaks real-time
+    // there and nothing else.
+    cors: { origin: (origin, callback) => callback(null, env.isAllowedOrigin(origin)), credentials: true },
   });
 
   /*

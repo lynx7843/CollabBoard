@@ -180,7 +180,7 @@ cp client/.env.example client/.env
 | `MONGODB_URI` | **yes** | — | Atlas connection string. The server refuses to boot without it. |
 | `JWT_SECRET` | **yes** | — | Long random hex: `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
 | `MONGODB_DB` | no | `collabboard` | Database name. |
-| `CLIENT_ORIGIN` | in production | `http://localhost:5173` | CORS allowlist, comma-separated. Must list the deployed client URL. |
+| `CLIENT_ORIGIN` | in production | `http://localhost:5173` | CORS allowlist, comma-separated; `*` may stand in for one hostname label. Must list the deployed client URL — see [Preview deployments](#preview-deployments). |
 | `ADMIN_USERNAME` | in production | `dilan_amantha` | The one account that may create and delete boards. |
 | `NODE_ENV` | in production | `development` | Set to `production` on the API host; also suppresses stack traces in error responses. |
 | `PORT` | no | `5000` | Injected by the host — do not set it there, and do not hardcode it. |
@@ -270,6 +270,28 @@ the dashboard, so a build is reproducible from the repository rather than from
 settings nobody can see in a diff. That file also carries the two rewrites
 described under [How the client reaches the API](#how-the-client-reaches-the-api).
 
+### Preview deployments
+
+Every Vercel preview build is served from its own generated subdomain
+(`collab-board-git-<branch>-<scope>.vercel.app`), so a `CLIENT_ORIGIN` holding
+only the production URL blocks every preview. The REST calls survive it — they
+go through the rewrite and arrive same-origin — but the socket connects directly
+to the API host and is cross-origin, so real-time is the part that breaks, and it
+breaks silently.
+
+`CLIENT_ORIGIN` entries therefore accept a `*` in place of one hostname label:
+
+```
+CLIENT_ORIGIN=https://collab-board-six-kappa.vercel.app,https://collab-board-*.vercel.app
+```
+
+The wildcard never crosses a dot, so the pattern above admits that project's
+previews and not `https://collab-board-x.attacker.vercel.app`. Keep it narrow —
+`https://*.vercel.app` would admit every project on the host. The matching lives
+in `server/src/utils/origins.js` and is used by both the REST middleware and the
+Socket.IO handshake, so the two cannot drift; `server/tests/cors.origins.test.js`
+covers it.
+
 Set the client's build-time variables in Settings → Environment Variables
 (`VITE_DEMO_MODE=false`, `VITE_API_URL=https://syncspace-api-rxhi.onrender.com`),
 and remember that Vite bakes them in — changing one needs a redeploy.
@@ -325,5 +347,6 @@ The Vite dev server already proxies `/api` to `http://localhost:5000`, so the cl
 ## Known Limitations
 
 * **No persistence:** With no backend, all board and member changes are lost on refresh.
+* **Rate limits are per-instance and in-memory:** Registration, login, the invite lookup and the password change are capped per IP over a 15-minute window (`server/src/middleware/rateLimit.js`), but the counts live in the API process's memory. They reset on every deploy or restart — including when a sleeping free-tier host wakes — and two instances behind a load balancer would each allow the full quota. Correct for the single always-on instance this runs on; a shared store (Redis) is the fix if it is ever scaled out.
 * **No drag-and-drop:** Tasks are moved with the **Change** button on each card.
 * **Desktop-first:** The layout is optimised for desktop browsers.
