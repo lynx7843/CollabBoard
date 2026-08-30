@@ -3,6 +3,7 @@ import { Plus, Pencil, CheckCircle2 } from 'lucide-react';
 import { boardReducer, initialState } from '../reducers/boardReducer';
 import { useBoardSockets } from '../hooks/useBoardSockets';
 import { api } from '../api';
+import { cacheBoardTasks, getCachedBoardTasks } from '../utils/storage';
 import { DEMO_MODE } from '../demo/demoMode';
 import { colors, shadowSm } from '../theme';
 
@@ -65,9 +66,14 @@ const actionButtonStyle = {
   transition: 'background-color 150ms, color 150ms',
 };
 
-// Demo mode has no server to hand back an _id, so a card needs a local one to
-// be addressed by. Module scope keeps the impure call out of the component.
-const localTaskId = () => `local-${Date.now()}`;
+/*
+ * A card the server has not seen yet — created in demo mode, or created while
+ * offline — still needs an id to be addressed by until the real one arrives.
+ * The random suffix matters: two cards added in the same millisecond would
+ * otherwise share an id, and the offline queue maps ids to their server
+ * counterparts one by one.
+ */
+const localTaskId = () => `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 const fieldStyle = {
   width: '100%',
@@ -324,7 +330,7 @@ const AddTaskButton = ({ onClick }) => (
   </button>
 );
 
-export const BoardView = ({ boardId, board, submitAction }) => {
+export const BoardView = ({ boardId, board, submitAction, revision = 0 }) => {
   const [state, dispatch] = useReducer(boardReducer, initialState);
   const [error, setError] = useState('');
   // The column whose "Add Task" form is open, and the task being edited — at
@@ -343,39 +349,79 @@ export const BoardView = ({ boardId, board, submitAction }) => {
       dispatch({ type: 'TASKS_LOADED', payload: columns });
       setError('');
     } catch (err) {
+      /*
+       * The API is unreachable or the session cannot be renewed. Rather than an
+       * empty board, show what this device last saw — including work done
+       * offline, which is still queued and will sync — and say that is what it
+       * is looking at.
+       */
+      const cached = getCachedBoardTasks(boardId);
+      if (cached) {
+        dispatch({ type: 'TASKS_LOADED', payload: cached });
+        setError('Showing the last version saved on this device. Changes will sync when the server is reachable.');
+        return;
+      }
       setError(err.message);
     }
   }, [boardId]);
 
-  // Tasks belong to the board in the URL, so switching tabs refetches rather
-  // than carrying the previous board's cards across.
+  /*
+   * Tasks belong to the board in the URL, so switching tabs refetches rather
+   * than carrying the previous board's cards across. `revision` changes when
+   * the offline queue drains or a conflict is resolved — the server's copy has
+   * moved on behind the board's back, so it is read again.
+   */
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadTasks();
-  }, [loadTasks]);
+  }, [loadTasks, revision]);
 
+  /*
+   * Every version of the board this device sees is written to the cache, so a
+   * refresh — online or not — comes back to the same cards, including ones
+   * added while offline that the server has not accepted yet.
+   */
+  useEffect(() => {
+    if (DEMO_MODE || state.loading) return;
+    cacheBoardTasks(boardId, state.columns);
+  }, [boardId, state.columns, state.loading]);
+
+  /*
+   * Every change below goes through submitAction rather than the API directly.
+   * That is what puts the offline queue in the path: when the server cannot be
+   * reached the change is stored and replayed later, and the board keeps the
+   * card it optimistically drew either way.
+   */
   const handleAddTask = async (status, { title, description, priority }) => {
     setAddingTo(null);
 
+    const draft = { id: localTaskId(), title, description, status, priority };
+
     if (DEMO_MODE) {
-      const draft = { id: localTaskId(), title, description, status, priority };
       dispatch({ type: 'TASK_CREATED', payload: draft });
       if (submitAction) await submitAction({ type: 'CREATE_TASK', status, task: draft });
       return;
     }
 
-    try {
-      const { task } = await api(`/boards/${boardId}/tasks`, {
-        method: 'POST',
-        body: { title, description, status, priority },
-      });
-      // Dispatched with the server's task, so the card carries the real _id
-      // that every later edit is addressed by.
-      dispatch({ type: 'TASK_CREATED', payload: task });
+    const result = await submitAction({ type: 'CREATE_TASK', status, task: draft });
+
+    if (result.saved) {
+      // The server's task, so the card carries the real _id every later edit is
+      // addressed by.
+      dispatch({ type: 'TASK_CREATED', payload: result.data.task });
       setError('');
-    } catch (err) {
-      setError(err.message);
+      return;
     }
+
+    if (result.queued) {
+      // Drawn with its local id. syncQueue swaps in the server's id once the
+      // create is replayed, and the board reloads at that point.
+      dispatch({ type: 'TASK_CREATED', payload: draft });
+      setError('');
+      return;
+    }
+
+    setError(result.error?.message || 'Unable to add the task.');
   };
 
   const handleEditTask = async (task, { title, description, priority }) => {
@@ -390,32 +436,39 @@ export const BoardView = ({ boardId, board, submitAction }) => {
       return;
     }
 
-    try {
-      const saved = await api(`/boards/${boardId}/tasks/${task._id}`, {
-        method: 'PATCH',
-        /*
-         * The version this edit was written against. If someone else saved
-         * first the server answers 409 and writes nothing, rather than letting
-         * this edit erase theirs — the task's `version` is what makes the two
-         * writes distinguishable.
-         */
-        body: { title, description, priority, expectedVersion: task.version },
-      });
-      dispatch({ type: 'TASK_UPDATED', payload: saved.task });
-      setError('');
-    } catch (err) {
-      // A rejected edit: put the server's version on the board so what is shown
-      // is what was actually saved, and say so rather than leaving the edit
-      // looking like it stuck.
-      if (err.status === 409 && err.data?.latest) {
-        dispatch({ type: 'TASK_UPDATED', payload: err.data.latest });
-        setError(`${err.message} Your change was not saved.`);
-        return;
-      }
+    /*
+     * `expectedVersion` is the version this edit was written against. If
+     * someone else saved first the server refuses it rather than letting this
+     * edit erase theirs, and useBoardPersistence raises the conflict dialog
+     * with both versions in it.
+     */
+    const result = await submitAction({
+      type: 'UPDATE_TASK',
+      taskId: task._id,
+      task: updated,
+      expectedVersion: task.version,
+    });
 
-      setError(err.message);
-      loadTasks();
+    if (result.saved) {
+      dispatch({ type: 'TASK_UPDATED', payload: result.data.task });
+      setError('');
+      return;
     }
+
+    if (result.conflict) {
+      // Show what is actually stored while the dialog asks which version to
+      // keep; resolving it reloads the board either way.
+      if (result.latest) dispatch({ type: 'TASK_UPDATED', payload: result.latest });
+      return;
+    }
+
+    if (result.queued) {
+      setError('');
+      return;
+    }
+
+    setError(result.error?.message || 'Unable to save the task.');
+    loadTasks();
   };
 
   const handleMoveTask = async (task, from, to) => {
@@ -430,16 +483,17 @@ export const BoardView = ({ boardId, board, submitAction }) => {
       return;
     }
 
-    try {
-      await api(`/boards/${boardId}/tasks/${task._id}`, {
-        method: 'PATCH',
-        body: { status: to },
-      });
+    // No expectedVersion: a move is a whole-card intent, not a merge of two
+    // people's text, so the last one wins rather than raising a dialog.
+    const result = await submitAction({ type: 'MOVE_TASK', taskId, from, to });
+
+    if (result.saved || result.queued) {
       setError('');
-    } catch (err) {
-      setError(err.message);
-      loadTasks();
+      return;
     }
+
+    setError(result.error?.message || 'Unable to move the task.');
+    loadTasks();
   };
 
   const handleDeleteTask = async (task) => {
@@ -453,13 +507,15 @@ export const BoardView = ({ boardId, board, submitAction }) => {
       return;
     }
 
-    try {
-      await api(`/boards/${boardId}/tasks/${task._id}`, { method: 'DELETE' });
+    const result = await submitAction({ type: 'DELETE_TASK', taskId });
+
+    if (result.saved || result.queued) {
       setError('');
-    } catch (err) {
-      setError(err.message);
-      loadTasks();
+      return;
     }
+
+    setError(result.error?.message || 'Unable to delete the task.');
+    loadTasks();
   };
 
   return (

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
+import { cacheBoardList, getCachedBoardList } from '../utils/storage';
 import { DEMO_MODE } from '../demo/demoMode';
 
 // Mirrors the board the demo stubs assume, so the tab strip has something to
@@ -29,8 +30,21 @@ export function useBoards() {
       setBoards(data.boards);
       setCanCreate(data.canCreate);
       setMaxBoards(data.maxBoards);
+      // Kept so a reload with no server still has a tab strip to render. The
+      // cached tasks would otherwise have no board to appear on.
+      cacheBoardList({ boards: data.boards, canCreate: data.canCreate, maxBoards: data.maxBoards });
       setError('');
     } catch (err) {
+      const cached = getCachedBoardList();
+      if (cached?.boards?.length) {
+        setBoards(cached.boards);
+        setMaxBoards(cached.maxBoards ?? 5);
+        // Never from the cache: creating a board is a server-side privilege
+        // check, and there is no server to ask.
+        setCanCreate(false);
+        setError('');
+        return;
+      }
       setError(err.message);
     } finally {
       setLoading(false);
