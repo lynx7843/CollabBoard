@@ -6,9 +6,14 @@ import { DEMO_MODE, DEMO_TOKEN, DEMO_USER, DEMO_CREDENTIALS } from '../../demo/d
 import { colors, shadowSm } from '../../theme';
 
 /*
- * A real account seeded in MongoDB, shown while demo mode is off so the form
- * stays usable without registering first. Remove before this is deployed
- * anywhere real — it prints working credentials on the login screen.
+ * A real account seeded in MongoDB, offered as a shortcut so the form stays
+ * usable locally without registering first.
+ *
+ * These are WORKING credentials for the account ADMIN_USERNAME points at — the
+ * one account allowed to create and delete boards — so the hint below is gated
+ * on import.meta.env.DEV. Vite replaces that with `false` when it builds, which
+ * drops both the markup and these strings out of the bundle: a deployed build
+ * neither shows them nor contains them.
  */
 const TEST_ACCOUNT = {
   username: 'dilan_amantha',
@@ -135,12 +140,12 @@ const LoginForm = () => {
                 Demo login — username: <strong>{DEMO_CREDENTIALS.username}</strong>
                 {'  '}·{'  '}password: <strong>{DEMO_CREDENTIALS.password}</strong>
               </p>
-            ) : (
+            ) : import.meta.env.DEV ? (
               <p style={styles.hint}>
-                Test account — username: <strong>{TEST_ACCOUNT.username}</strong>
+                Test account (dev only) — username: <strong>{TEST_ACCOUNT.username}</strong>
                 {'  '}·{'  '}password: <strong>{TEST_ACCOUNT.password}</strong>
               </p>
-            )}
+            ) : null}
 
             <button type="submit" disabled={loading} className="cb-new-task" style={styles.button}>
               {loading ? 'Logging in...' : 'Log in'}
