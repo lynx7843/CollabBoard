@@ -62,19 +62,6 @@ they are the parts with real mechanics behind them.
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    B["Browser<br/>React + Vite"]
-    V["Vercel<br/>static build + rewrites"]
-    R["Render<br/>Express + Socket.IO"]
-    M["MongoDB Atlas"]
-
-    B -->|"/api/* (relative)"| V
-    V -->|rewrite| R
-    B <-->|"WebSocket (direct)"| R
-    R --> M
-```
-
 Two deployables, because Socket.IO needs a process that stays alive and holds
 open connections, which serverless functions do not.
 
