@@ -1,5 +1,7 @@
 # CollabBoard
 
+[![CI](https://github.com/lynx7843/CollabBoard/actions/workflows/ci.yml/badge.svg)](https://github.com/lynx7843/CollabBoard/actions/workflows/ci.yml)
+
 A real-time, collaborative Kanban-style task board designed for seamless team productivity. CollabBoard features a clean, high-contrast interface to eliminate distractions and keep the focus entirely on your work.
 
 ## Project Status
@@ -30,7 +32,6 @@ A real-time, collaborative Kanban-style task board designed for seamless team pr
 ### Not yet started
 
 * Backend API, database, and JWT authentication
-* Automated tests and CI
 * Drag-and-drop (`@dnd-kit` is installed but not yet used — tasks move via the **Change** button)
 
 ## Tech Stack
@@ -92,12 +93,24 @@ No database, Docker, or backend setup is required — the frontend runs standalo
 
 ### Other commands
 
-Run these from the `client/` directory:
+From `client/`:
 
 ```bash
-npm run build     # production build
-npm run preview   # serve the production build locally
-npm run lint      # ESLint
+npm test             # Vitest, once
+npm run test:watch   # Vitest, watching
+npm run test:coverage
+npm run build        # production build
+npm run preview      # serve the production build locally
+npm run lint         # ESLint
+```
+
+From `server/`:
+
+```bash
+npm test             # Jest against an in-memory MongoDB
+npm run test:watch
+npm run dev          # nodemon
+npm start
 ```
 
 ## API Documentation
@@ -265,6 +278,45 @@ copy has moved on behind it.
 
 The status bar reports all of this — offline, how many changes are waiting,
 syncing, and what the last sync did.
+
+## Tests and CI
+
+```bash
+cd server && npm test     # 125 tests, 9 suites
+cd client && npm test     #  37 tests, 4 suites
+```
+
+**Server — Jest + Supertest against a real in-memory MongoDB**
+(`mongodb-memory-server`), not a mocked one, so unique indexes and the E11000
+duplicate path are genuinely exercised. Covers registration, login (including
+the timing-equalised unknown-user path), membership, search, account changes,
+CORS origins, the real-time socket, concurrent edits, and a suite that fails if
+a route is added without OpenAPI documentation or documented without existing.
+
+**Client — Vitest + Testing Library** (`jsdom`). Four suites, chosen where a
+regression would be silent rather than obvious:
+
+| Suite | What it holds down |
+| --- | --- |
+| `reducers/boardReducer.test.js` | The state machine where real-time events meet optimistic local updates — the echo of your own change is ignored, someone else's move relocates the card, an edit does not reorder its column. |
+| `utils/replayQueue.test.js` | The offline queue's rules: replay order, rewriting a local id to the one the server issued, and what a conflict, a dropped connection or a refusal each do to the rest of the queue. |
+| `components/auth/LoginForm.test.jsx` | That a failed login shows the server's own message rather than a generic one, and that the dev-only test-account hint is absent from a production build. |
+| `components/BoardTabs.test.jsx` | That a non-admin is not offered "New Board" or a delete control, and that the admin gets the cap notice at the limit. |
+
+The client tests import `describe`/`it`/`expect` from `vitest` rather than using
+globals, so no test globals have to be declared to ESLint and a test file reads
+like any other module.
+
+### Continuous integration
+
+`.github/workflows/ci.yml` runs both halves in parallel on every pull request
+and every push to `main`:
+
+* **API** — `npm ci && npm test`, with the MongoDB binary that
+  `mongodb-memory-server` downloads cached between runs.
+* **Client** — `npm ci && npm test && npm run build`. The build is a check in
+  its own right: it is what Vercel runs, and it fails on an import that resolves
+  in dev but not in a bundle.
 
 ## Environment Variables
 
