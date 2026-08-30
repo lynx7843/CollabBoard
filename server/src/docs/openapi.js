@@ -105,6 +105,13 @@ const definition = {
               'so tasks created before priorities existed keep their old label.',
           },
           position: { type: 'integer', description: 'Order within its column.' },
+          version: {
+            type: 'integer',
+            description:
+              'Incremented on every change that sticks. Quote it back as ' +
+              '`expectedVersion` on a PATCH to have a lost update rejected ' +
+              'with 409 rather than applied over someone else\'s.',
+          },
           createdBy: { type: 'string' },
           createdAt: { type: 'string', format: 'date-time' },
           updatedAt: { type: 'string', format: 'date-time' },

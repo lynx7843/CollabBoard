@@ -25,7 +25,7 @@ A real-time, collaborative Kanban-style task board designed for seamless team pr
 ### Implemented but awaiting a backend
 
 * **Offline Support:** Client-side caching and an offline action queue are implemented in `useBoardPersistence`.
-* **Conflict Resolution:** The client detects HTTP 409 responses and shows a resolution dialog rather than silently overwriting.
+* **Conflict Resolution:** `TaskConflictDialog` renders a side-by-side choice on a 409, but reaching it needs `submitAction`'s board-actions endpoint. Detection itself is live — see [Concurrent Edits](#concurrent-edits).
 
 ### Not yet started
 
@@ -162,6 +162,61 @@ Two settings have to line up or the socket silently never connects:
 `VITE_API_URL` on Vercel must point at the API host (a rewrite cannot carry a
 WebSocket upgrade), and `CLIENT_ORIGIN` on the API host must list the Vercel
 domain.
+
+## Concurrent Edits
+
+Two people can open the same card. Without a check, whoever saves second wins
+and the first edit disappears with nothing said — the update is lost, and the
+person who made it has no way to know.
+
+Every task carries a `version`, incremented on each change that sticks. An edit
+sends the version it was written against:
+
+```
+PATCH /api/boards/:boardId/tasks/:taskId
+{ "title": "Rewrite the intro", "expectedVersion": 3 }
+```
+
+If the task is still at version 3, the write is applied and the version becomes
+4. If it is not, nothing is written and the answer is **409** carrying the
+server's copy:
+
+```json
+{
+  "message": "This task was changed by someone else while you were editing it.",
+  "latest": { "_id": "…", "title": "Someone else's title", "version": 4 }
+}
+```
+
+`expectedVersion` is optional, and what a client omits it for matters as much as
+what it sends it for:
+
+* **Content edits send it.** Losing a title or description someone typed is the
+  case worth interrupting for.
+* **Moves do not.** Dragging a card to another column is a whole-card intent, not
+  a merge of two people's text; refusing it with a dialog would be noise. Last
+  writer wins, and the move still bumps the version.
+
+A malformed `expectedVersion` is a 400 rather than a shrug: quietly ignoring one
+would switch the protection off at exactly the moment a client believed it was
+on. Tasks written before versioning existed are read as version 0.
+
+**Why a conflict is rarer than it sounds.** The socket broadcast (see
+[Real-Time Updates](#real-time-updates)) delivers the other person's change,
+and `boardReducer` replaces the card — so the next edit quotes the version that
+just arrived and is applied normally. A 409 therefore means the change did *not*
+reach this client: the tab was offline, the socket had dropped, or the two
+writes raced within the same instant. That is precisely when a silent overwrite
+would otherwise happen.
+
+**What the client does with it today.** `BoardView` puts the server's version of
+the task back on the board and reports that the edit was not saved, so what is
+on screen is always what is stored. The richer resolution — showing both
+versions side by side and offering "keep mine" / "keep theirs", already built as
+`TaskConflictDialog` — is wired to `useBoardPersistence.submitAction`, which
+still needs its board-actions endpoint before the dialog can be reached.
+
+Covered by `server/tests/tasks.conflict.test.js`.
 
 ## Environment Variables
 

@@ -22,6 +22,30 @@ function castId(value) {
   return /^[0-9a-fA-F]{24}$/.test(String(value)) ? value : null;
 }
 
+/*
+ * Optimistic concurrency, the client's half.
+ *
+ * A caller that wants to be told about a lost update quotes the version it read
+ * the task at. Absent, the write is applied unconditionally — last writer wins,
+ * which is what a move (status change) wants. Present but not a number is a
+ * mistake worth failing loudly on: silently ignoring it would turn the check
+ * off exactly when a client believed it was on.
+ */
+function readExpectedVersion(value) {
+  if (value === undefined || value === null || value === '') return null;
+
+  // Only a number or a numeric string. `Number(true)` is 1, and a boolean that
+  // quietly became "version 1" would be the silent check this guard exists to
+  // prevent.
+  const numeric = typeof value === 'number' || typeof value === 'string';
+  const expected = numeric ? Number(value) : NaN;
+
+  if (!Number.isInteger(expected) || expected < 0) {
+    throw ApiError.badRequest('expectedVersion must be a whole number.');
+  }
+  return expected;
+}
+
 function readStatus(value, fallback) {
   const status = String(value ?? fallback ?? 'todo').trim().toLowerCase();
   if (!STATUSES.includes(status)) {
@@ -101,6 +125,29 @@ async function updateTask(req, res) {
   const board = await loadBoardForMember(req);
   const task = await loadTask(req, board);
 
+  const expectedVersion = readExpectedVersion(req.body.expectedVersion);
+  // Tasks written before versioning existed have no version at all; they are
+  // at 0, which is what a client reading them will have quoted.
+  const currentVersion = task.version ?? 0;
+
+  /*
+   * Checked before anything is applied, so a rejected edit leaves the task
+   * exactly as the other writer left it.
+   *
+   * The body carries `latest` alongside the message rather than putting it in
+   * the usual `details` envelope: the client cannot resolve the conflict
+   * without the server's version of the task in hand, and it is not an error
+   * detail so much as the other half of the answer. useBoardPersistence reads
+   * it from the top level.
+   */
+  if (expectedVersion !== null && expectedVersion !== currentVersion) {
+    res.status(409).json({
+      message: 'This task was changed by someone else while you were editing it.',
+      latest: task.toJSON(),
+    });
+    return;
+  }
+
   if (req.body.title !== undefined) {
     const title = String(req.body.title).trim();
     if (!title) throw ApiError.badRequest('Give the task a title.');
@@ -123,9 +170,16 @@ async function updateTask(req, res) {
     }
   }
 
-  await task.save();
-
-  emitToBoard(board.slug, 'task:updated', task.toJSON());
+  /*
+   * A PATCH that changes nothing keeps the version where it is. Bumping it
+   * would invalidate everyone else's expectedVersion for no reason, and there
+   * is nothing for the board to redraw either.
+   */
+  if (task.isModified()) {
+    task.version = currentVersion + 1;
+    await task.save();
+    emitToBoard(board.slug, 'task:updated', task.toJSON());
+  }
 
   res.json({ task: task.toJSON() });
 }

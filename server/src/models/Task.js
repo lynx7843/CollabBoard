@@ -18,6 +18,17 @@ const taskSchema = new Schema(
     status: { type: String, enum: STATUSES, default: 'todo' },
     priority: { type: String, default: '', trim: true, maxlength: 40 },
     position: { type: Number, default: 0 },
+    /*
+     * Bumped on every change that sticks, and quoted back by a client that
+     * wants its edit rejected rather than applied blindly (see
+     * taskController.updateTask). This is the concurrency control the board
+     * relies on: two people editing the same card do not silently overwrite
+     * each other, the second one is told.
+     *
+     * Kept as an ordinary field rather than Mongoose's __v, which only counts
+     * array operations and is not a general-purpose document version.
+     */
+    version: { type: Number, default: 0 },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true },
