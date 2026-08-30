@@ -2,147 +2,280 @@
 
 [![CI](https://github.com/lynx7843/CollabBoard/actions/workflows/ci.yml/badge.svg)](https://github.com/lynx7843/CollabBoard/actions/workflows/ci.yml)
 
-A real-time, collaborative Kanban-style task board designed for seamless team productivity. CollabBoard features a clean, high-contrast interface to eliminate distractions and keep the focus entirely on your work.
+A collaborative Kanban board for small teams. Several people work the same board
+at once: task changes appear for everyone without a refresh, a clashing edit is
+refused instead of silently overwriting someone's work, and changes made while
+the network is down are kept on the device and replayed when it returns.
 
-## Project Status
+| | |
+| --- | --- |
+| **App** | https://collab-board-six-kappa.vercel.app |
+| **API** | https://syncspace-api-rxhi.onrender.com |
+| **API docs** | https://syncspace-api-rxhi.onrender.com/api/docs |
 
-> **Frontend only.** The React client is running and presentable. The backend has **not been implemented yet** — `server/` currently contains dependencies but no source code.
->
-> To keep the client usable without an API, it runs in **demo mode**: authentication, board data, and member management are stubbed on the client. See [Demo Mode](#demo-mode) below.
+> The API runs on a free tier that sleeps when idle, so the first request after a
+> quiet spell takes ~30 seconds to wake it. Open the app once before demoing.
 
-## Features
+---
 
-### Working now (client-side)
+## What it does
 
-* **Kanban Board:** Three columns — To Do, Doing, Done — with live task counts.
-* **Task Management:** Create tasks from the board header or any column, edit a task's title and description, move a task between columns, and delete it.
-* **Member Management:** View the board's member list, invite by email, and remove members.
-* **Authentication Flow:** Login and create-account screens with protected routes and a logout action.
-* **Responsive Layout:** Columns grow to fill the board area and scroll horizontally on narrow screens.
+**Boards and tasks.** Three columns — To Do, Doing, Done — with live task counts.
+Tasks are created inline in any column, edited in place, moved between columns
+and deleted. Each carries a title, description and priority.
 
-### Working now (real-time)
+**Multiple boards.** Each board is addressable at `/boards/:slug` behind a
+browser-style tab strip, so a reload or a shared link reopens the same board.
+Only the group leader (the account `ADMIN_USERNAME` names) can create or delete
+boards, capped at five — enforced on the server, merely reflected in the UI.
 
-* **Real-Time Collaboration:** Task creates, edits, moves and deletes are broadcast over Socket.IO to everyone viewing the same board. See [Real-Time Updates](#real-time-updates).
+**Membership.** Invite a registered user by email, remove a member, and see who
+is on the board. The owner is always retained. A non-member asking for a board
+gets `404`, not `403`, so the API never confirms that a board they cannot see
+exists.
 
-### Working now (resilience)
+**Accounts.** Register, sign in, and change username, email or password from a
+settings page. The session survives a password change because the token carries
+only the user id.
 
-* **Offline Support:** Task changes are cached and queued on the device and replayed on reconnect — see [Offline Support](#offline-support).
-* **Conflict Resolution:** A clashing edit is refused rather than applied over someone else's, and `TaskConflictDialog` offers the choice — see [Concurrent Edits](#concurrent-edits).
+**Search.** One box searches every board the caller belongs to, by board name and
+task title. A board-name match wins over a task-title match; the oldest board
+breaks a tie.
 
-### Not yet started
+**Real-time, conflict detection and offline support** each have a section below —
+they are the parts with real mechanics behind them.
 
-* Backend API, database, and JWT authentication
-* Drag-and-drop (`@dnd-kit` is installed but not yet used — tasks move via the **Change** button)
+### Where the brief's requirements live
+
+| Requirement | How it is met | Where |
+| --- | --- | --- |
+| Authentication | JWT, bcrypt at 12 rounds, protected routes | [Security](#security) |
+| Real-time updates | Socket.IO room per board, broadcast on every task write | [Real-time updates](#real-time-updates) |
+| Concurrent-edit detection | Per-task `version`, `409` with the server's copy, resolution dialog | [Concurrent edits](#concurrent-edits) |
+| Work survives a refresh or brief network loss | Board cached on the device, changes queued and replayed | [Offline support](#offline-support) |
+| Automated tests | 125 server tests, 37 client tests | [Tests](#tests) |
+| CI | GitHub Actions, both halves on every PR | [Continuous integration](#continuous-integration) |
+| Local multi-service run | `docker compose up` — Mongo, API and client | [Running with Docker](#running-with-docker) |
+| Public URL | Vercel + Render + Atlas | [Deployment](#deployment) |
+
+---
+
+## Architecture
+
+```mermaid
+flowchart LR
+    B["Browser<br/>React + Vite"]
+    V["Vercel<br/>static build + rewrites"]
+    R["Render<br/>Express + Socket.IO"]
+    M["MongoDB Atlas"]
+
+    B -->|"/api/* (relative)"| V
+    V -->|rewrite| R
+    B <-->|"WebSocket (direct)"| R
+    R --> M
+```
+
+Two deployables, because Socket.IO needs a process that stays alive and holds
+open connections, which serverless functions do not.
+
+Every REST call in the client is a **relative** `/api/...` path — there is no API
+base URL in the bundle. Three different things resolve it: the Vite dev proxy
+locally, an nginx `proxy_pass` under Docker, and a rewrite in `client/vercel.json`
+in production. The last of those also makes the API same-origin, so there is no
+CORS preflight on ordinary requests.
+
+The WebSocket is the exception. A rewrite cannot carry an upgrade, so the socket
+connects straight to the API host at `VITE_API_URL` and that origin must be in
+the API's `CLIENT_ORIGIN` allowlist.
+
+**Server layout:** routes → controllers → models, with middleware, validators and
+utils beside them. Validation rules are shared between the Mongoose schema and
+the request validators (`utils/patterns.js`), so the database and the API cannot
+drift apart.
+
+**Client layout:** components, hooks, context and one reducer per concern. A
+single `api()` helper owns the auth header and error shaping; a single
+`useBoardPersistence` owns every write.
+
+---
 
 ## Tech Stack
 
 | Area | Technology |
 | --- | --- |
-| **Frontend** | React 19, Vite 8, React Router 7, lucide-react |
-| **Real-Time** | socket.io-client *(client wired, server pending)* |
-| **Backend** | Node.js, Express, Mongoose, Socket.io *(dependencies declared, not implemented)* |
-| **Tooling** | ESLint, Vitest + Testing Library (client), Jest + Supertest (server), Docker Compose, GitHub Actions |
+| **Client** | React 19, Vite 8, React Router 7, socket.io-client, lucide-react |
+| **Server** | Node 22, Express 5, Mongoose 9, Socket.IO 4, jsonwebtoken, bcryptjs |
+| **Database** | MongoDB (Atlas in deployment, `mongo:8` under Docker) |
+| **Tests** | Vitest + Testing Library (client), Jest + Supertest + mongodb-memory-server (server) |
+| **Docs** | OpenAPI 3 generated from JSDoc, served as Swagger UI |
+| **Ops** | GitHub Actions, Docker Compose, Vercel, Render |
+
+---
+
+## Getting Started
+
+**Prerequisites:** Node.js 20.19+ or 22.12+ (developed on Node 22), and a MongoDB
+connection string — either Atlas or the Docker setup below.
+
+```bash
+git clone https://github.com/lynx7843/CollabBoard.git
+cd CollabBoard
+```
+
+**1. API**
+
+```bash
+cd server
+npm install
+cp .env.example .env      # fill in MONGODB_URI and JWT_SECRET
+npm run dev               # http://localhost:5000
+```
+
+**2. Client**, in a second terminal:
+
+```bash
+cd client
+npm install
+cp .env.example .env
+npm run dev               # http://localhost:5173
+```
+
+The Vite dev server proxies `/api` to `http://localhost:5000`, so both halves run
+against each other with no further configuration.
+
+### Other commands
+
+```bash
+# server/
+npm test              # Jest against an in-memory MongoDB
+npm start             # production start
+
+# client/
+npm test              # Vitest, once
+npm run test:watch
+npm run test:coverage
+npm run build         # production build
+npm run preview       # serve that build
+npm run lint
+```
+
+---
+
+## Running with Docker
+
+The whole stack on one machine, with nothing installed but Docker:
+
+```bash
+docker compose up --build      # then open http://localhost:8080
+```
+
+| Service | What it runs | Where |
+| --- | --- | --- |
+| `client` | nginx serving the Vite build | http://localhost:8080 |
+| `server` | Node 22, Express + Socket.IO | http://localhost:5000 (docs at `/api/docs`) |
+| `mongo` | `mongo:8`, data in a named volume | inside the compose network |
+
+`docker compose down` stops it and keeps the data; `down -v` discards the
+database too. **The deployed instance does not use this file** — it runs on
+Vercel and Render against Atlas, so the `mongo` service has no counterpart there.
+
+Three things in it are deliberate:
+
+* **The API port is published** even though nginx proxies `/api`, because the
+  browser connects the WebSocket straight to the API — exactly as in the
+  deployment. The compose stack therefore exercises the same CORS allowlist.
+* **`client/nginx.conf` mirrors `client/vercel.json`**: an SPA fallback so
+  `/boards/:slug` survives a refresh, plus a same-origin `/api`.
+* **`NODE_ENV=development` on the API.** Under `production` Mongoose skips
+  `autoIndex`, and this database starts empty — the unique indexes on username
+  and email would never be built.
+
+---
 
 ## Project Structure
 
 ```
 CollabBoard/
-├── client/                  # React frontend (the runnable app)
-│   └── src/
-│       ├── components/      # Board, layout, member, and auth UI
-│       ├── context/         # AuthContext
-│       ├── hooks/           # useBoardSockets
-│       ├── reducers/        # boardReducer
-│       ├── utils/hooks/     # useBoardPersistence, storage
-│       ├── demo/            # Demo-mode stubs (remove once the API exists)
-│       ├── theme.js         # Shared colour palette
-│       ├── skeleton.jsx     # UI design draft — board
-│       ├── Login.jsx        # UI design draft — login
-│       └── Create_account.jsx  # UI design draft — sign up
-└── server/                  # Backend — not yet implemented
+├── client/
+│   ├── src/
+│   │   ├── components/     Board, tabs, members, settings, auth, conflict dialog
+│   │   ├── context/        AuthContext — the session
+│   │   ├── hooks/          useBoards, useBoardSockets
+│   │   ├── reducers/       boardReducer — the board's state machine
+│   │   ├── utils/          storage, taskRequests, replayQueue, useBoardPersistence
+│   │   ├── demo/           Stub layer for running the UI with no API
+│   │   ├── api.js          The one place a REST call is built
+│   │   └── socket.js       The one socket connection
+│   ├── nginx.conf          Docker: SPA fallback + /api proxy
+│   └── vercel.json         Vercel: the same two rules
+├── server/
+│   ├── src/
+│   │   ├── routes/         Endpoints + the OpenAPI blocks above them
+│   │   ├── controllers/    auth, board, task, user
+│   │   ├── models/         User, Board, Task
+│   │   ├── middleware/     requireAuth, rateLimit, errorHandler, notFound
+│   │   ├── validators/     Request shapes, sharing rules with the models
+│   │   ├── config/         env, db
+│   │   ├── utils/          token, ApiError, patterns, origins, publicUser
+│   │   ├── docs/           OpenAPI spec assembly
+│   │   └── socket.js       Socket.IO: auth, rooms, emits
+│   ├── tests/              9 suites
+│   └── index.js            HTTP server + socket, boot and shutdown
+├── docker-compose.yml
+└── .github/workflows/ci.yml
 ```
 
-The `.jsx` design drafts at the root of `src/` are Tailwind reference mockups, not part of the running app. The live components are styled to match them.
+The `.jsx` files at the root of `client/src` (`skeleton`, `Login`,
+`Create_account`) are Tailwind design drafts. Nothing imports them and they are
+tree-shaken out of the bundle; the live components are styled to match them.
 
-## Getting Started
+---
 
-### Prerequisites
+## The API
 
-* **Node.js 20.19+ or 22.12+** (developed on Node 22)
-* npm
+Every route is under `/api`, and every one but registration, login and health
+requires `Authorization: Bearer <token>`.
 
-No database, Docker, or backend setup is required — the frontend runs standalone.
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/auth/register` | Create an account |
+| `POST` | `/auth/login` | Sign in |
+| `GET` | `/users/me` | The signed-in account |
+| `PATCH` | `/users/me` | Change username or email |
+| `PATCH` | `/users/me/password` | Change password, verifying the current one |
+| `GET` | `/users/lookup` | Resolve an email to an account, for invites |
+| `GET` | `/boards` | Boards the caller belongs to, plus `canCreate` |
+| `POST` | `/boards` | Create a board (admin only, capped at 5) |
+| `DELETE` | `/boards/:boardId` | Delete a board and its tasks (admin only) |
+| `GET` | `/boards/search` | Find the board to open for a search term |
+| `GET` | `/boards/:boardId/members` | The board's members |
+| `POST` | `/boards/:boardId/members` | Invite by email |
+| `DELETE` | `/boards/:boardId/members/:userId` | Remove a member |
+| `GET` | `/boards/:boardId/tasks` | Tasks, grouped by column |
+| `POST` | `/boards/:boardId/tasks` | Create a task |
+| `PATCH` | `/boards/:boardId/tasks/:taskId` | Update or move a task |
+| `DELETE` | `/boards/:boardId/tasks/:taskId` | Delete a task |
+| `GET` | `/health` | Database state and uptime |
 
-### Run the app
+`:boardId` is the board's slug, so URLs read `/api/boards/q3-roadmap/tasks`.
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/lynx7843/CollabBoard.git
-   cd CollabBoard
-   ```
-2. Install the frontend dependencies:
-   ```bash
-   cd client
-   npm install
-   ```
-3. Start the dev server:
-   ```bash
-   npm run dev
-   ```
-4. Open **http://localhost:5173** in your browser.
+**Interactive docs** are at `/api/docs`, generated from the `@openapi` blocks
+above each route (`ENABLE_API_DOCS=false` turns them off). A test fails if a
+route is added without documentation, or documented without existing — so the
+docs cannot silently rot.
 
-### Other commands
+**One error contract.** Every failure answers `{ message, details? }` with a
+message written to be shown to a person. Only errors the API means to expose
+have their message forwarded; anything unexpected is logged in full and reported
+as a flat `500`.
 
-From `client/`:
+---
 
-```bash
-npm test             # Vitest, once
-npm run test:watch   # Vitest, watching
-npm run test:coverage
-npm run build        # production build
-npm run preview      # serve the production build locally
-npm run lint         # ESLint
-```
-
-From `server/`:
-
-```bash
-npm test             # Jest against an in-memory MongoDB
-npm run test:watch
-npm run dev          # nodemon
-npm start
-```
-
-## API Documentation
-
-The server publishes an OpenAPI 3 spec generated from `@openapi` blocks that sit
-directly above each route in `server/src/routes/`, so an endpoint and its
-description are edited in the same place.
-
-With the server running:
-
-| URL | What it is |
-| --- | --- |
-| <http://localhost:5000/api/docs> | Swagger UI — browse every endpoint and call it with **Try it out** |
-| <http://localhost:5000/api/docs.json> | The raw spec, for Postman, Insomnia or client codegen |
-
-Everything except `/health`, `/auth/register` and `/auth/login` needs a bearer
-token: call register or login, copy the returned `token`, and paste it into
-**Authorize** at the top of the page. It is remembered across reloads.
-
-The shared pieces — server list, the JWT scheme, and the `User` / `Board` /
-`Task` / `Error` schemas — live in `server/src/docs/openapi.js`. Set
-`ENABLE_API_DOCS=false` to keep the UI off a deployment.
-
-`server/tests/docs.openapi.test.js` fails if a route is added without an
-`@openapi` block, or if the spec describes a route that no longer exists.
-
-## Real-Time Updates
+## Real-time updates
 
 Two people on the same board see each other's changes without refreshing. The
-server holds one Socket.IO room per board, keyed by the board's slug — the same
-id the REST routes address a board by — so a change only reaches the people
-looking at that board.
+server holds one Socket.IO room per board, keyed by slug, so a change only
+reaches the people looking at that board.
 
 | Direction | Event | Payload |
 | --- | --- | --- |
@@ -152,35 +285,32 @@ looking at that board.
 | server → client | `task:updated` | the whole task, after the change |
 | server → client | `task:deleted` | the task's id |
 
-The events are emitted by `taskController` after the write commits, carrying the
-same payload the writer received in its HTTP response — so no client ends up
-holding a different version of a task than the one it would get by refetching.
-A move is a status change, so it travels as `task:updated`; `boardReducer`
-relocates the card when the status disagrees with the column it is sitting in.
-The writer is in the room too and receives its own event back, which is what
-keeps a second tab of the same session in sync; the reducer ignores a task it
+Events are emitted after the write commits, carrying the same payload the writer
+received in its HTTP response, so no client holds a different version of a task
+than it would get by refetching. A move is a status change, so it travels as
+`task:updated`; the reducer relocates the card when the status disagrees with the
+column it is in. The writer is in the room too and receives its own event back —
+that is what keeps a second tab in sync, and the reducer ignores a task it
 already holds rather than drawing it twice.
 
 **The connection is authenticated.** A WebSocket handshake has no `Authorization`
-header, so `client/src/socket.js` sends the session's JWT in the handshake
-payload and `server/src/socket.js` verifies it — then checks board membership
-before honouring a `join-board`. Knowing a board's slug is not enough to listen
-to it, which matches the REST side answering a non-member with 404.
+header, so the client sends its JWT in the handshake payload; the server verifies
+it against a live account and checks board membership before honouring a
+`join-board`. Knowing a slug is not enough to listen to a board.
 
-Files: `server/src/socket.js`, `server/index.js` (the HTTP server the upgrade
-needs), `client/src/socket.js`, `client/src/hooks/useBoardSockets.js`. Covered by
-`server/tests/tasks.realtime.test.js`.
+Rooms live on the server's side of a connection, so the client rejoins on every
+`connect` — a socket that drops and reconnects would otherwise come back knowing
+nothing about the board on screen.
 
-Two settings have to line up or the socket silently never connects:
-`VITE_API_URL` on Vercel must point at the API host (a rewrite cannot carry a
-WebSocket upgrade), and `CLIENT_ORIGIN` on the API host must list the Vercel
-domain.
+*Files:* `server/src/socket.js`, `client/src/socket.js`,
+`client/src/hooks/useBoardSockets.js`. *Tests:* `server/tests/tasks.realtime.test.js`.
 
-## Concurrent Edits
+---
 
-Two people can open the same card. Without a check, whoever saves second wins
-and the first edit disappears with nothing said — the update is lost, and the
-person who made it has no way to know.
+## Concurrent edits
+
+Two people can open the same card. Without a check, whoever saves second wins and
+the first edit disappears with nothing said.
 
 Every task carries a `version`, incremented on each change that sticks. An edit
 sends the version it was written against:
@@ -190,9 +320,8 @@ PATCH /api/boards/:boardId/tasks/:taskId
 { "title": "Rewrite the intro", "expectedVersion": 3 }
 ```
 
-If the task is still at version 3, the write is applied and the version becomes
-4. If it is not, nothing is written and the answer is **409** carrying the
-server's copy:
+Still at 3, and the write is applied and the version becomes 4. Not at 3, and
+nothing is written — the answer is `409` carrying the server's copy:
 
 ```json
 {
@@ -201,331 +330,230 @@ server's copy:
 }
 ```
 
-`expectedVersion` is optional, and what a client omits it for matters as much as
-what it sends it for:
+The client shows both versions in a dialog. *Keep mine* re-sends the edit rebased
+onto the version the server holds, so it is applied rather than refused a second
+time; *keep theirs* abandons it.
 
-* **Content edits send it.** Losing a title or description someone typed is the
-  case worth interrupting for.
-* **Moves do not.** Dragging a card to another column is a whole-card intent, not
-  a merge of two people's text; refusing it with a dialog would be noise. Last
-  writer wins, and the move still bumps the version.
+`expectedVersion` is optional, and what omits it matters as much as what sends it:
+**content edits send it**, because losing typed text is worth interrupting for;
+**moves do not**, because dragging a card is a whole-card intent, not a merge of
+two people's text — last writer wins, and the move still bumps the version. A
+malformed `expectedVersion` is a `400` rather than a shrug: ignoring one would
+switch the protection off exactly when a client believed it was on.
 
-A malformed `expectedVersion` is a 400 rather than a shrug: quietly ignoring one
-would switch the protection off at exactly the moment a client believed it was
-on. Tasks written before versioning existed are read as version 0.
-
-**Why a conflict is rarer than it sounds.** The socket broadcast (see
-[Real-Time Updates](#real-time-updates)) delivers the other person's change,
-and `boardReducer` replaces the card — so the next edit quotes the version that
-just arrived and is applied normally. A 409 therefore means the change did *not*
-reach this client: the tab was offline, the socket had dropped, or the two
-writes raced within the same instant. That is precisely when a silent overwrite
+A conflict is rarer than it sounds, because the socket usually delivers the other
+person's change first and the next edit quotes the version that just arrived. A
+`409` therefore means the change did *not* reach this client — an offline tab, a
+dropped socket, or a genuine race. That is precisely when a silent overwrite
 would otherwise happen.
 
-**What the client does with it today.** `BoardView` puts the server's version of
-the task back on the board and reports that the edit was not saved, so what is
-on screen is always what is stored. The richer resolution — showing both
-versions side by side and offering "keep mine" / "keep theirs", already built as
-`TaskConflictDialog` — is wired to `useBoardPersistence.submitAction`, which
-still needs its board-actions endpoint before the dialog can be reached.
+*Tests:* `server/tests/tasks.conflict.test.js`.
 
-Covered by `server/tests/tasks.conflict.test.js`.
+---
 
-## Offline Support
+## Offline support
 
-Work in progress survives a refresh and a brief network loss. Three pieces, all
-on the client:
+Work in progress survives a refresh and a brief network loss.
 
 **One write path.** `BoardView` never calls the API for a change. It describes
 what happened — `CREATE_TASK`, `UPDATE_TASK`, `MOVE_TASK`, `DELETE_TASK` — and
 hands it to `useBoardPersistence.submitAction`, which is what puts the queue in
 the path of every edit rather than beside it. The card is drawn immediately
-either way, so the board looks the same whether the change reached the server or
-is waiting on the device.
+either way.
 
-**No `/actions` endpoint.** An action is translated into the ordinary REST call
-it corresponds to (`utils/taskRequests.js`), so a change replayed from the queue
-goes through the same API a live one does and there is only one server contract
-to keep working.
+**No `/actions` endpoint.** An action is translated into the ordinary REST call it
+corresponds to (`utils/taskRequests.js`), so a replayed change goes through the
+same API a live one does.
 
-**A cache and a queue.** Every version of the board is written to `localStorage`
-(`utils/storage.js`). If the tasks request fails, the board renders the last copy
-this device saw and says so, rather than showing nothing. Changes made while
-unreachable are queued, and the tab strip is cached too — without it a reload
-while offline would have no board to open and the cached tasks nowhere to go.
+**A cache and a queue.** Every version of the board is written to `localStorage`.
+If the tasks request fails, the board renders the last copy this device saw and
+says so. The tab strip is cached too — without it a reload while offline would
+have no board to open. Changes made while unreachable are queued, and the status
+bar reports how many are waiting.
 
-### Replaying the queue
-
-Order is the hard part, and it is why the replay is its own module
-(`utils/replayQueue.js`). A task created offline has a local id, so every edit
-queued behind it refers to a task the server has never heard of. The create is
-replayed first, the id it returns is mapped, and the rest of the queue is
-rewritten to use it. Replaying out of order would 404 on every follow-up.
-
-Each outcome is handled differently, which matters more than it sounds:
+**Replaying it** is its own module (`utils/replayQueue.js`) because order is the
+hard part: a task created offline has a local id, so every edit queued behind it
+names a task the server has never heard of. The create is replayed first, its new
+id is mapped, and the rest of the queue is rewritten to use it.
 
 | Outcome | What happens |
 | --- | --- |
-| Applied | Dropped from the queue; a create's new id is remembered for the changes behind it. |
-| Server unreachable again | Kept, and the drain stops — the rest is still in order behind it. |
-| **409 conflict** | Kept, the drain stops, and `TaskConflictDialog` opens with both versions. One dialog, not one per queued change. |
-| Refused (`400`/`404`) | Dropped, with a console warning. The task was deleted while this device was away; replaying it again would fail identically, so keeping it would mean a queue that never empties. |
+| Applied | Dropped from the queue; a create's new id is remembered for the changes behind it |
+| Unreachable again | Kept, and the drain stops — the rest stays in order behind it |
+| `409` conflict | Kept, the drain stops, and the dialog opens. One dialog, not one per queued change |
+| Refused (`400`/`404`) | Dropped — the task was deleted while this device was away, and replaying it would fail identically |
 
-Resolving a conflict as *keep mine* re-sends the edit rebased onto the version
-the server actually holds, so it is applied rather than refused a second time;
-*keep theirs* abandons it. Either way the board reloads, because the server's
-copy has moved on behind it.
+*Tests:* `client/src/utils/replayQueue.test.js`.
 
-The status bar reports all of this — offline, how many changes are waiting,
-syncing, and what the last sync did.
+---
 
-## Tests and CI
+## Security
+
+* **Passwords** are bcrypt hashed at 12 rounds. The hash is `select: false` on
+  the model and stripped again in `toJSON`, so it cannot leave the API even by
+  accident.
+* **Login is timing-equalised.** An unknown username is compared against a decoy
+  hash, and wrong-password and no-such-user answer identically, so the endpoint
+  cannot be used to enumerate accounts.
+* **The JWT carries only the user id.** Everything else is read from the database
+  on the request that needs it, so a token cannot assert a claim the database
+  disagrees with, and one for a deleted account is rejected.
+* **Privilege-escalation guard.** A user cannot rename themselves into the
+  configured admin username, since admin rights are derived from it.
+* **Rate limits** on register, login, the invite lookup and the password change.
+  Successful attempts are not counted, so a user with the right password is never
+  locked out by someone else guessing from the same address.
+* **CORS allowlist** shared by the REST middleware and the Socket.IO handshake,
+  with wildcard support for preview subdomains — see
+  [Preview deployments](#preview-deployments).
+* **Also:** a 100 kb JSON body cap, `trust proxy`, `x-powered-by` disabled,
+  regex-escaped user input on search, and stack traces suppressed in production.
+
+---
+
+## Tests
 
 ```bash
 cd server && npm test     # 125 tests, 9 suites
 cd client && npm test     #  37 tests, 4 suites
 ```
 
-**Server — Jest + Supertest against a real in-memory MongoDB**
-(`mongodb-memory-server`), not a mocked one, so unique indexes and the E11000
-duplicate path are genuinely exercised. Covers registration, login (including
-the timing-equalised unknown-user path), membership, search, account changes,
-CORS origins, the real-time socket, concurrent edits, and a suite that fails if
-a route is added without OpenAPI documentation or documented without existing.
+**Server — Jest + Supertest against a real in-memory MongoDB**, not a mocked one,
+so unique indexes and the duplicate-key path are genuinely exercised. Nine
+suites: registration, login, membership, search, account changes, CORS origins,
+real-time events, concurrent edits, and the documentation check.
 
-**Client — Vitest + Testing Library** (`jsdom`). Four suites, chosen where a
+**Client — Vitest + Testing Library** (`jsdom`), four suites chosen where a
 regression would be silent rather than obvious:
 
 | Suite | What it holds down |
 | --- | --- |
-| `reducers/boardReducer.test.js` | The state machine where real-time events meet optimistic local updates — the echo of your own change is ignored, someone else's move relocates the card, an edit does not reorder its column. |
-| `utils/replayQueue.test.js` | The offline queue's rules: replay order, rewriting a local id to the one the server issued, and what a conflict, a dropped connection or a refusal each do to the rest of the queue. |
-| `components/auth/LoginForm.test.jsx` | That a failed login shows the server's own message rather than a generic one, and that the dev-only test-account hint is absent from a production build. |
-| `components/BoardTabs.test.jsx` | That a non-admin is not offered "New Board" or a delete control, and that the admin gets the cap notice at the limit. |
-
-The client tests import `describe`/`it`/`expect` from `vitest` rather than using
-globals, so no test globals have to be declared to ESLint and a test file reads
-like any other module.
+| `boardReducer.test.js` | Where real-time events meet optimistic updates: your own echo ignored, someone else's move relocating the card, an edit not reordering its column |
+| `replayQueue.test.js` | Replay order, rewriting a local id to the server's, and what a conflict, a dropped connection or a refusal each do to the rest of the queue |
+| `LoginForm.test.jsx` | That a failed login shows the server's own message, and that the dev-only test-account hint is absent from a production build |
+| `BoardTabs.test.jsx` | That a non-admin is offered neither "New Board" nor a delete control, and the admin gets the cap notice at the limit |
 
 ### Continuous integration
 
-`.github/workflows/ci.yml` runs both halves in parallel on every pull request
-and every push to `main`:
+`.github/workflows/ci.yml` runs both halves in parallel on every pull request and
+every push to `main`:
 
-* **API** — `npm ci && npm test`, with the MongoDB binary that
-  `mongodb-memory-server` downloads cached between runs.
-* **Client** — `npm ci && npm test && npm run build`. The build is a check in
-  its own right: it is what Vercel runs, and it fails on an import that resolves
-  in dev but not in a bundle.
+* **API** — `npm ci && npm test`, with the MongoDB binary cached between runs.
+* **Client** — `npm ci && npm test && npm run build`. The build is a check in its
+  own right: it is what Vercel runs, and it catches an import that resolves in
+  dev but not in a bundle.
 
-## Running it with Docker
-
-The whole stack — database, API, client — on one machine, with nothing installed
-but Docker:
-
-```bash
-docker compose up --build      # then open http://localhost:8080
-```
-
-| Service | Image | Where |
-| --- | --- | --- |
-| `client` | nginx serving the Vite build | http://localhost:8080 |
-| `server` | Node 22, Express + Socket.IO | http://localhost:5000 (Swagger UI at `/api/docs`) |
-| `mongo` | `mongo:8`, data in a named volume | inside the compose network only |
-
-`docker compose down` stops it and keeps the data; `down -v` discards the
-database with it.
-
-**The deployed instance does not use this file.** It runs the client on Vercel
-and the API on Render against MongoDB Atlas, so the `mongo` service here has no
-counterpart in production — this is for local runs and for demonstrating the
-stack without a deployment.
-
-A few things in it are deliberate:
-
-* **The API port is published**, even though nginx proxies `/api` internally.
-  The browser connects the WebSocket straight to the API, exactly as it does in
-  the deployment where a Vercel rewrite cannot carry an upgrade — so the compose
-  stack exercises the same `CLIENT_ORIGIN` allowlist production does.
-* **`client/nginx.conf` mirrors `client/vercel.json`**: an SPA fallback so
-  `/boards/:slug` survives a refresh, and a same-origin `/api`. The client code
-  is identical in both, with no API base URL baked into the bundle.
-* **`VITE_API_URL` and `VITE_DEMO_MODE` are build args, not environment.** Vite
-  bakes them into the bundle, so changing one needs `--build`, and
-  `client/.dockerignore` excludes `.env` so a local file cannot silently
-  override them.
-* **`NODE_ENV=development` on the API.** Under `production` Mongoose skips
-  `autoIndex`, and this database starts empty — the unique indexes on username
-  and email would never be built (`server/src/config/db.js`).
-* **No secrets.** The compose `JWT_SECRET` is a local-only string and Mongo runs
-  without credentials on a private network. The deployment sets its own values
-  in its host's environment UI.
+---
 
 ## Environment Variables
 
-Two separate sets: the API server reads a `.env` file (or the host's environment
-UI), and the client's are compiled into the bundle by Vite. Copy the examples:
+Two sets. The API reads a `.env` file or the host's environment; the client's are
+compiled into the bundle by Vite. Copy the examples:
 
 ```bash
 cp server/.env.example server/.env
 cp client/.env.example client/.env
 ```
 
-### API server (`server/.env`)
+### API (`server/.env`)
 
 | Variable | Required | Default | Notes |
 | --- | --- | --- | --- |
-| `MONGODB_URI` | **yes** | — | Atlas connection string. The server refuses to boot without it. |
-| `JWT_SECRET` | **yes** | — | Long random hex: `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
-| `MONGODB_DB` | no | `collabboard` | Database name. |
-| `CLIENT_ORIGIN` | in production | `http://localhost:5173` | CORS allowlist, comma-separated; `*` may stand in for one hostname label. Must list the deployed client URL — see [Preview deployments](#preview-deployments). |
-| `ADMIN_USERNAME` | in production | `dilan_amantha` | The one account that may create and delete boards. |
-| `NODE_ENV` | in production | `development` | Set to `production` on the API host; also suppresses stack traces in error responses. |
-| `PORT` | no | `5000` | Injected by the host — do not set it there, and do not hardcode it. |
+| `MONGODB_URI` | **yes** | — | The server refuses to boot without it |
+| `JWT_SECRET` | **yes** | — | `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
+| `MONGODB_DB` | no | `collabboard` | Database name |
+| `CLIENT_ORIGIN` | in production | `http://localhost:5173` | CORS allowlist, comma-separated; `*` may stand in for one hostname label |
+| `ADMIN_USERNAME` | in production | `dilan_amantha` | The one account that may create and delete boards |
+| `NODE_ENV` | in production | `development` | `production` also suppresses stack traces in responses |
+| `PORT` | no | `5000` | Injected by the host — do not set it there |
 | `JWT_EXPIRES_IN` | no | `7d` | |
 | `BCRYPT_ROUNDS` | no | `12` | |
-| `ENABLE_API_DOCS` | no | `true` | `false` keeps Swagger UI off a public deployment. |
+| `ENABLE_API_DOCS` | no | `true` | `false` keeps Swagger UI off a public deployment |
 
 Only the first two are enforced at boot. Because the rest fall back silently, the
-server prints its effective configuration on startup and warns in production
-about anything left at a development default — check that line in the deploy log
-after the first deploy:
+server prints its effective configuration on startup and warns about anything
+left at a development default — worth checking in the deploy log:
 
 ```
 CollabBoard API listening on http://localhost:5000 (production)
-  config: env=production  db=collabboard  admin=dilan_amantha  origins=https://collabboard.vercel.app  docs=on
+  config: env=production  db=collabboard  admin=dilan_amantha  origins=https://collab-board-six-kappa.vercel.app  docs=on
 ```
 
 ### Client (`client/.env`)
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `VITE_DEMO_MODE` | unset (off) | `true` enables the offline stub layer. Leave it off for anything deployed. |
-| `VITE_API_URL` | `http://localhost:5000` | Origin of the API. Used by the Socket.IO connection; REST calls use relative `/api` paths. |
+| `VITE_DEMO_MODE` | unset (off) | `true` enables the stub layer. Never on a deployed build |
+| `VITE_API_URL` | `http://localhost:5000` | Where the browser reaches the API for the WebSocket |
 
-Vite only exposes `VITE_`-prefixed variables and **bakes them into the bundle at
-build time**, so changing one needs a rebuild locally or a redeploy on the host —
-restarting is not enough. Nothing secret belongs in these: they ship to the
-browser in plain text.
+Vite bakes `VITE_*` into the bundle **at build time**, so changing one needs a
+rebuild or a redeploy — restarting is not enough. Nothing secret belongs in
+these: they ship to the browser in plain text.
 
-### How the client reaches the API
-
-Every REST call in the client uses a **relative** `/api/...` path — there is no
-API base URL baked into the code. Two different things make that resolve:
-
-* **Locally:** the Vite dev server proxies `/api` to `http://localhost:5000`
-  (`client/vite.config.js`).
-* **Deployed:** `client/vercel.json` rewrites `/api/:path*` to the API host, so
-  the browser only ever talks to the Vercel origin. Requests are same-origin,
-  which means no CORS preflight and no `Authorization` header stripped in
-  between. Point that rewrite at your own API host if you redeploy the backend.
-
-The Socket.IO connection is the exception: a rewrite does not carry a WebSocket
-upgrade, so `client/src/socket.js` connects straight to `VITE_API_URL` and that
-origin **must** be listed in the API's `CLIENT_ORIGIN`.
-
-`client/vercel.json` carries a second rule after that one, rewriting everything
-else to `/index.html`. React Router owns `/boards/:slug`, `/members/:slug` and
-`/settings`, but a static host knows nothing about them and answers 404 when one
-is opened directly — on a refresh, on a shared link, or when search jumps
-straight to a board. The catch-all hands those paths the app instead. Order
-matters: the `/api` rule has to come first, or API calls would be answered with
-`index.html` too. Real files (`/assets/*`, the favicons) are still served as
-themselves, because Vercel only applies a rewrite when nothing on disk matches.
+---
 
 ## Deployment
 
-The app is deployed as two separate services, because Socket.IO needs a process
-that stays alive and holds open connections — which Vercel's serverless
-functions do not:
-
 | Part | Host | Notes |
 | --- | --- | --- |
-| `client/` | Vercel | Static Vite build. |
-| `server/` | Render | https://syncspace-api-rxhi.onrender.com — Express + Socket.IO against Mongo Atlas. |
-
-On Render's free tier the API sleeps after ~15 minutes idle, so the first request
-after a quiet spell takes ~30s to wake it. Open the app once before demoing it.
+| `client/` | Vercel | Static Vite build |
+| `server/` | Render | Always-on process, needed for Socket.IO |
+| Database | MongoDB Atlas | Network access must allow the host's egress |
 
 ### Vercel project settings
 
-This is a monorepo with no `package.json` at the repository root, so **Root
-Directory must be set to `client`** or the build fails immediately with no
-project to install. That one is set in the Vercel dashboard (Settings → General)
-and cannot live in a config file:
+This is a monorepo with no `package.json` at the root, so **Root Directory must
+be `client`** or the build fails with no project to install.
 
-| Setting | Value | Where it is set |
+| Setting | Value | Set in |
 | --- | --- | --- |
-| Root Directory | `client` | Dashboard only — **required** |
-| Node.js Version | 22.x | Dashboard only |
-| Framework Preset | Vite | `client/vercel.json` |
-| Install Command | `npm install` | `client/vercel.json` |
-| Build Command | `npm run build` | `client/vercel.json` |
-| Output Directory | `dist` | `client/vercel.json` |
+| Root Directory | `client` | Dashboard — **required** |
+| Node.js Version | 22.x | Dashboard |
+| Framework / Install / Build / Output | Vite / `npm install` / `npm run build` / `dist` | `client/vercel.json` |
 
-The bottom four are pinned in `client/vercel.json`, which takes precedence over
-the dashboard, so a build is reproducible from the repository rather than from
-settings nobody can see in a diff. That file also carries the two rewrites
-described under [How the client reaches the API](#how-the-client-reaches-the-api).
+The last four are pinned in `client/vercel.json`, which takes precedence over the
+dashboard, so a build is reproducible from the repository. That file also carries
+the two rewrites — `/api/*` to the API host, then everything else to
+`/index.html` — in that order, because the API rule must not be swallowed by the
+SPA catch-all.
 
 ### Preview deployments
 
-Every Vercel preview build is served from its own generated subdomain
-(`collab-board-git-<branch>-<scope>.vercel.app`), so a `CLIENT_ORIGIN` holding
-only the production URL blocks every preview. The REST calls survive it — they
-go through the rewrite and arrive same-origin — but the socket connects directly
-to the API host and is cross-origin, so real-time is the part that breaks, and it
-breaks silently.
-
-`CLIENT_ORIGIN` entries therefore accept a `*` in place of one hostname label:
+Every Vercel preview build gets a generated subdomain, so a `CLIENT_ORIGIN`
+holding only the production URL blocks them. REST survives it — same-origin
+through the rewrite — but the socket is cross-origin, so real-time is the part
+that breaks, silently. Entries therefore accept a `*` in place of one hostname
+label:
 
 ```
 CLIENT_ORIGIN=https://collab-board-six-kappa.vercel.app,https://collab-board-*.vercel.app
 ```
 
-The wildcard never crosses a dot, so the pattern above admits that project's
-previews and not `https://collab-board-x.attacker.vercel.app`. Keep it narrow —
-`https://*.vercel.app` would admit every project on the host. The matching lives
-in `server/src/utils/origins.js` and is used by both the REST middleware and the
-Socket.IO handshake, so the two cannot drift; `server/tests/cors.origins.test.js`
-covers it.
+The wildcard never crosses a dot, so that admits this project's previews and not
+`https://collab-board-x.attacker.vercel.app`. Keep it narrow —
+`https://*.vercel.app` would admit every project on the host.
 
-Set the client's build-time variables in Settings → Environment Variables
-(`VITE_DEMO_MODE=false`, `VITE_API_URL=https://syncspace-api-rxhi.onrender.com`),
-and remember that Vite bakes them in — changing one needs a redeploy.
+---
 
 ## Demo Mode
 
-Because there is no API yet, the client ships with demo mode enabled. It short-circuits only the calls that would fail — nothing else is faked.
+A stub layer for showing the interface with no API running: it short-circuits the
+calls that would fail and fakes nothing else. Login accepts `user` / `password`,
+the board renders sample tasks held in memory, and the socket connection is
+skipped.
 
-**Log in with:**
-
-| Field | Value |
-| --- | --- |
-| Username | `user` |
-| Password | `password` |
-
-These are also shown on the login screen. Any other credentials produce an error naming the field that was wrong.
-
-What demo mode changes:
-
-* Login accepts the credentials above without a server; **any** submission on the create-account screen reports that the backend is not implemented.
-* The board renders seeded sample tasks, and edits are held in memory only — they do not survive a reload.
-* The member list is pre-populated; invites and removals update local state only.
-* The Socket.io connection and the board's initial `GET` are skipped, so the console stays clean.
-
-Demo mode is controlled by a single flag in `client/src/demo/demoMode.js` and is **off by default** — the app talks to the real API unless you opt in:
+It is **off by default** — the app talks to the real API unless you opt in:
 
 ```bash
 # client/.env
 VITE_DEMO_MODE=true
 ```
 
-Vite bakes the value into the bundle at build time, so changing it requires a rebuild (or a redeploy), not just a restart.
+> While demo mode is on, login accepts hard-coded credentials with no server.
+> Never enable it on a deployed build. The default is inverted deliberately, so a
+> forgotten variable fails safe.
 
-> ⚠️ While demo mode is on, login accepts the hard-coded credentials with no server. Never enable it on a deployed build.
-
-The Vite dev server already proxies `/api` to `http://localhost:5000`, so the client is ready to talk to a backend as soon as one is running.
+---
 
 ## Contributors
 
@@ -542,8 +570,20 @@ The Vite dev server already proxies `/api` to `http://localhost:5000`, so the cl
 | upeka200163 | MGGU SEWWANDI |
 | wsklwithana  | WSKL WITHANA |
 
+---
+
 ## Known Limitations
 
-* **Rate limits are per-instance and in-memory:** Registration, login, the invite lookup and the password change are capped per IP over a 15-minute window (`server/src/middleware/rateLimit.js`), but the counts live in the API process's memory. They reset on every deploy or restart — including when a sleeping free-tier host wakes — and two instances behind a load balancer would each allow the full quota. Correct for the single always-on instance this runs on; a shared store (Redis) is the fix if it is ever scaled out.
-* **No drag-and-drop:** Tasks are moved with the **Change** button on each card.
-* **Desktop-first:** The layout is optimised for desktop browsers.
+* **Rate limits are per-instance and in-memory.** They reset on every deploy or
+  restart — including when a sleeping free-tier host wakes — and two instances
+  behind a load balancer would each allow the full quota. Correct for the single
+  instance this runs on; a shared store (Redis) is the fix if it is ever scaled
+  out.
+* **The JWT is kept in `localStorage`,** so any XSS could read it. The standard
+  alternative, an httpOnly cookie, brings CSRF handling with it and is out of
+  scope for this module.
+* **The API sleeps when idle** on its free tier, so the first request after a
+  quiet spell is slow.
+* **No drag-and-drop.** Tasks move with the **Change** button on each card.
+  (`@dnd-kit` is installed but unused.)
+* **Desktop-first.** The layout is optimised for desktop browsers.
