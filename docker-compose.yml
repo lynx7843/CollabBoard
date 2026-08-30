@@ -1,0 +1,80 @@
+# The whole app on one machine: database, API and client.
+#
+#   docker compose up --build     then open http://localhost:8080
+#
+# This is for local development and for showing the stack without a deployment.
+# The deployed instance does not use this file: it runs the client on Vercel and
+# the API on Render against MongoDB Atlas, so the `mongo` service below has no
+# counterpart there.
+
+services:
+  mongo:
+    image: mongo:8
+    restart: unless-stopped
+    volumes:
+      # Named, so boards and tasks survive `compose down`. `down -v` discards it.
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  server:
+    build: ./server
+    restart: unless-stopped
+    # Published because the browser connects the WebSocket straight to the API,
+    # exactly as it does in the deployment. Swagger UI is here too:
+    # http://localhost:5000/api/docs
+    ports:
+      - "5000:5000"
+    environment:
+      # No credentials on the compose network; Atlas is the deployment's problem.
+      MONGODB_URI: mongodb://mongo:27017
+      MONGODB_DB: collabboard
+      # Local-only value. The deployment sets its own, and never from a file in
+      # the repository.
+      JWT_SECRET: local-development-secret-not-used-anywhere-else
+      # The client's origin below. The socket is cross-origin, so this has to
+      # match or real-time silently stops working.
+      CLIENT_ORIGIN: http://localhost:8080
+      ADMIN_USERNAME: dilan_amantha
+      PORT: "5000"
+      # Deliberately not `production`: with NODE_ENV=production Mongoose skips
+      # autoIndex, and this database starts empty, so the unique indexes on
+      # username and email would never be built (see server/src/config/db.js).
+      NODE_ENV: development
+    # /api/health reports the database connection too, so a container that
+    # started but cannot reach Mongo reads as unhealthy rather than ready.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:5000/api/health').then(r=>r.json()).then(b=>process.exit(b.db==='connected'?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  client:
+    build:
+      context: ./client
+      args:
+        # Where the BROWSER reaches the API, for the WebSocket only — REST goes
+        # through nginx on the client's own origin. Baked into the bundle, so
+        # changing it needs `--build`.
+        VITE_API_URL: http://localhost:5000
+        VITE_DEMO_MODE: "false"
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - server
+
+volumes:
+  mongo-data:
