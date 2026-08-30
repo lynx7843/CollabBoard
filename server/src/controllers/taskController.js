@@ -1,6 +1,7 @@
 const Task = require('../models/Task');
 const ApiError = require('../utils/ApiError');
 const { loadBoardForMember } = require('./boardController');
+const { emitToBoard } = require('../socket');
 
 const { STATUSES } = Task;
 
@@ -73,6 +74,18 @@ async function createTask(req, res) {
     createdBy: req.user._id,
   });
 
+  /*
+   * The other people on this board are told after the write, never instead of
+   * it: the response is what the caller acts on, and the broadcast is what
+   * saves everyone else a refresh. The same payload goes to both, so a client
+   * cannot end up with a different task than the one it would have fetched.
+   *
+   * The sender is in the room too and receives its own event back. That is
+   * deliberate — boardReducer ignores a task it already holds, and it means a
+   * write made in another tab of the same session still lands.
+   */
+  emitToBoard(board.slug, 'task:created', task.toJSON());
+
   res.status(201).json({ task: task.toJSON() });
 }
 
@@ -112,6 +125,8 @@ async function updateTask(req, res) {
 
   await task.save();
 
+  emitToBoard(board.slug, 'task:updated', task.toJSON());
+
   res.json({ task: task.toJSON() });
 }
 
@@ -124,6 +139,10 @@ async function deleteTask(req, res) {
   const task = await loadTask(req, board);
 
   await Task.deleteOne({ _id: task._id });
+
+  // Just the id: there is no task left to describe, and it is what the client's
+  // TASK_DELETED reducer filters on.
+  emitToBoard(board.slug, 'task:deleted', String(task._id));
 
   res.json({ deleted: String(task._id) });
 }
