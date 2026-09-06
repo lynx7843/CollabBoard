@@ -162,6 +162,14 @@ const emptyStyle = { color: '#6b7280', fontSize: '14px' };
 export default function App() {
   return (
     <Routes>
+      {/*
+       * The app opens on the login screen. A stored session still signs the
+       * user in everywhere below, so a reload or a shared /boards link goes
+       * straight to the board — this only stops the entry point itself from
+       * jumping into the dashboard on the strength of a token nothing has
+       * checked yet, which on a cold API reads as an empty, broken board.
+       */}
+      <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<LoginForm />} />
       <Route path="/register" element={<RegisterForm />} />
       <Route element={<ProtectedRoute />}>
