@@ -3,6 +3,9 @@ node_modules/
 .env*
 !.env.example
 !.env.*.example
+# undotted env files (client/env, server/env) hold real secrets too
+env
+!src/config/env.js
 
 build/
 dist/
