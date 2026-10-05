@@ -1,0 +1,23 @@
+# ---------------------------------------------------------------------------
+# CollabBoard server configuration. Never commit this file.
+# ---------------------------------------------------------------------------
+
+PORT=5000
+NODE_ENV=development
+
+# Origin(s) allowed to call this API. Comma-separated. 5173 is the Vite dev server.
+CLIENT_ORIGIN=http://localhost:5173
+
+# MongoDB Atlas
+MONGODB_URI=mongodb+srv://collabboard_app:BIWr3UABy68onLcb@collabboard-cluster.7lv2t6l.mongodb.net/collabboard?retryWrites=true&w=majority&appName=collabboard-cluster
+MONGODB_DB=collabboard
+
+# Auth
+JWT_SECRET=be48f9b89dc154948d051d2a9fb3ebf29b865772469a46e1da8ea25c9283ca76db3a50f30922fb0328b364c4fa8c9012
+JWT_EXPIRES_IN=7d
+BCRYPT_ROUNDS=12
+
+# The one account allowed to create and delete boards (its username).
+ADMIN_USERNAME=dilan_amantha
+
+# user password: password
